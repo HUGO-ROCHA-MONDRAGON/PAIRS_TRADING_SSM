@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from data_loader import extract_pair
-from strategies import strategy_A_signals
+from strategies import strategy_A_signals,strategy_B_signals
 from backtest import backtest_pair
 from backtest import estimate_gamma_ols, compute_spread  # or wherever you placed them
 
@@ -36,21 +36,32 @@ U = mu + 1.0 * sd
 L = mu - 1.0 * sd
 C = mu
 
-signal = strategy_A_signals(spread, U=U, L=L, C=C)
-bt = backtest_pair(pair["PA"], pair["PB"], gamma, signal, tc_bps=20)
+signal_A = strategy_A_signals(spread, U=U, L=L, C=C)
+signal_B = strategy_B_signals(spread, U=U, L=L)
+
+bt_A = backtest_pair(pair["PA"], pair["PB"], gamma, signal_A, tc_bps=20)
+bt_B = backtest_pair(pair["PA"], pair["PB"], gamma, signal_B, tc_bps=20)
 
 print("gamma:", gamma)
-print("Final net PnL (price units):", bt["cum_pnl_net"].iloc[-1])
+print("Final net PnL A:", bt_A["cum_pnl_net"].iloc[-1])
+print("Final net PnL B:", bt_B["cum_pnl_net"].iloc[-1])
 
-# Plot spread + thresholds + signals
-fig, ax = plt.subplots()
-ax.plot(spread.index, spread.values, label="spread")
-ax.axhline(U, linestyle="--", label="U")
-ax.axhline(L, linestyle="--", label="L")
-ax.axhline(C, linestyle="-", label="mean")
 
-# mark entries
-entries = signal.diff().fillna(0) != 0
-ax.scatter(spread.index[entries], spread[entries], s=10, label="signal change")
-ax.legend()
-plt.show()
+def plot_spread_with_signals(spread, U, L, C=None, signal=None, title=""):
+    plt.figure(figsize=(10,4))
+    plt.plot(spread.index, spread, label="spread")
+    plt.axhline(U, linestyle="--", label="U")
+    plt.axhline(L, linestyle="--", label="L")
+    if C is not None:
+        plt.axhline(C, linestyle="-", label="mean")
+
+    if signal is not None:
+        changes = signal.diff().fillna(0) != 0
+        plt.scatter(spread.index[changes], spread[changes], s=15, label="signal change")
+
+    plt.legend()
+    plt.title(title)
+    plt.show()
+
+plot_spread_with_signals(spread, U, L, C, signal_A, "Strategy A (baseline)")
+plot_spread_with_signals(spread, U, L, None, signal_B, "Strategy B (baseline)")

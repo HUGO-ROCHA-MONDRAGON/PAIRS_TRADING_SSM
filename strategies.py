@@ -27,3 +27,33 @@ def strategy_A_signals(spread: pd.Series, U: float, L: float, C: float) -> pd.Se
         sig[t] = pos
 
     return pd.Series(sig, index=spread.index, name="signal")
+
+def strategy_B_signals(spread: pd.Series, U: float, L: float) -> pd.Series:
+    """
+    Strategy B:
+    - Enter short spread when spread crosses U from below  -> signal = -1
+    - Enter long spread  when spread crosses L from above  -> signal = +1
+    - Hold the position until the spread crosses the opposite boundary,
+      then flip (close + open simultaneously).
+    No explicit close at the mean.
+    """
+    x = spread.values
+    sig = np.zeros_like(x, dtype=int)
+
+    pos = 0
+    for t in range(1, len(x)):
+        prev, cur = x[t-1], x[t]
+
+        # crossing up through U => short spread
+        if prev < U and cur >= U:
+            pos = -1
+
+        # crossing down through L => long spread
+        elif prev > L and cur <= L:
+            pos = +1
+
+        sig[t] = pos
+
+    sig[0] = 0
+    return pd.Series(sig, index=spread.index, name="signal")
+
