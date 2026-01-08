@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from data_loader import extract_pair
-from strategies import strategy_A_signals,strategy_B_signals
+from strategies import strategy_A_signals,strategy_B_signals,strategy_C_signals
 from backtest import backtest_pair
 from backtest import estimate_gamma_ols, compute_spread  # or wherever you placed them
 
@@ -32,20 +32,24 @@ spread = compute_spread(pair["PA"], pair["PB"], gamma)
 
 mu = float(spread.mean())
 sd = float(spread.std(ddof=1))
-U = mu + 1.0 * sd
-L = mu - 1.0 * sd
+#U = mu + 1.0 * sd
+#L = mu - 1.0 * sd
+U = mu + 0.3 * sd
+L = mu - 0.3 * sd
+
 C = mu
 
 signal_A = strategy_A_signals(spread, U=U, L=L, C=C)
 signal_B = strategy_B_signals(spread, U=U, L=L)
+signal_C = strategy_C_signals(spread, U=U, L=L, C=C)
 
 bt_A = backtest_pair(pair["PA"], pair["PB"], gamma, signal_A, tc_bps=20)
 bt_B = backtest_pair(pair["PA"], pair["PB"], gamma, signal_B, tc_bps=20)
+bt_C = backtest_pair(pair["PA"], pair["PB"], gamma, signal_C, tc_bps=20)
 
-print("gamma:", gamma)
 print("Final net PnL A:", bt_A["cum_pnl_net"].iloc[-1])
 print("Final net PnL B:", bt_B["cum_pnl_net"].iloc[-1])
-
+print("Final net PnL C:", bt_C["cum_pnl_net"].iloc[-1])
 
 def plot_spread_with_signals(spread, U, L, C=None, signal=None, title=""):
     plt.figure(figsize=(10,4))
@@ -65,3 +69,4 @@ def plot_spread_with_signals(spread, U, L, C=None, signal=None, title=""):
 
 plot_spread_with_signals(spread, U, L, C, signal_A, "Strategy A (baseline)")
 plot_spread_with_signals(spread, U, L, None, signal_B, "Strategy B (baseline)")
+plot_spread_with_signals(spread, U, L, C, signal_C, "Strategy C (baseline)")
