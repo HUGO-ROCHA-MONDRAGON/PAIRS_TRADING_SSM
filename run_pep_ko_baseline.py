@@ -1,10 +1,10 @@
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from data_loader import extract_pair
 from strategies import strategy_A_signals,strategy_B_signals,strategy_C_signals
 from backtest import backtest_pair
 from backtest import estimate_gamma_ols, compute_spread  # or wherever you placed them
+from plots import plot_spread_with_signals
 
 def restrict_dates(df, start, end):
     df = df.copy()
@@ -50,22 +50,6 @@ bt_C = backtest_pair(pair["PA"], pair["PB"], gamma, signal_C, tc_bps=20)
 print("Final net PnL A:", bt_A["cum_pnl_net"].iloc[-1])
 print("Final net PnL B:", bt_B["cum_pnl_net"].iloc[-1])
 print("Final net PnL C:", bt_C["cum_pnl_net"].iloc[-1])
-
-def plot_spread_with_signals(spread, U, L, C=None, signal=None, title=""):
-    plt.figure(figsize=(10,4))
-    plt.plot(spread.index, spread, label="spread")
-    plt.axhline(U, linestyle="--", label="U")
-    plt.axhline(L, linestyle="--", label="L")
-    if C is not None:
-        plt.axhline(C, linestyle="-", label="mean")
-
-    if signal is not None:
-        changes = signal.diff().fillna(0) != 0
-        plt.scatter(spread.index[changes], spread[changes], s=15, label="signal change")
-
-    plt.legend()
-    plt.title(title)
-    plt.show()
 
 plot_spread_with_signals(spread, U, L, C, signal_A, "Strategy A (baseline)")
 plot_spread_with_signals(spread, U, L, None, signal_B, "Strategy B (baseline)")

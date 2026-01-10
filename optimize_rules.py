@@ -16,39 +16,45 @@ def pnl_from_spread_changes(spread: np.ndarray, signal: np.ndarray) -> np.ndarra
     pnl = sig_lag * d
     return pnl  # shape (n_paths, n_steps-1)
 
-def sharpe_ratio(pnl: np.ndarray, eps: float = 1e-12) -> float:
+def sharpe_ratio_annualized(pnl_daily: np.ndarray, ann_factor: int = 252) -> float:
     """
-    Cross-path Sharpe proxy: mean(pnl) / std(pnl)
-    computed on flattened pnl array.
+    pnl_daily: array shape (T,)
     """
-    x = pnl.reshape(-1)
-    m = float(np.mean(x))
-    s = float(np.std(x, ddof=1))
-    return m / (s + eps)
+    mu = pnl_daily.mean()
+    sd = pnl_daily.std(ddof=1)
+    if sd == 0:
+        return 0.0
+    return (mu / sd) * np.sqrt(ann_factor)
+
 
 def grid_search_UL(
-    paths: np.ndarray,
+    paths: np.ndarray,          # shape (N, T)
     strategy: str,
     C: float,
     U_grid: np.ndarray,
     L_grid: np.ndarray,
+    objective: str = "SR",      # "SR" or "CR"
+    ann_factor: int = 252
 ) -> dict:
     """
-    Grid search for optimal (U,L) on simulated paths.
+    Paper-faithful grid search:
+    - For each (U,L), compute CR^n and SR^n for each path n
+    - Average across paths: CR = mean(CR^n), SR = mean(SR^n)
+    - Choose argmax of objective (CR or SR)
     """
-    best = {"U": None, "L": None, "score": -np.inf}
+    best = {"U": None, "L": None, "CR": -np.inf, "SR": -np.inf, "score": -np.inf}
+
+    N, T = paths.shape
 
     for U in U_grid:
         for L in L_grid:
             if L >= C or U <= C or L >= U:
                 continue
 
-            # build signals for each path
-            # Strategy functions expect pd.Series, so we vectorize manually:
-            sig = np.zeros_like(paths, dtype=int)
+            sig = np.zeros((N, T), dtype=int)
 
-            # run each path through the chosen strategy
-            for i in range(paths.shape[0]):
+            # signals per path
+            for i in range(N):
                 s = pd.Series(paths[i, :])
                 if strategy == "A":
                     sig[i, :] = strategy_A_signals(s, U=U, L=L, C=C).values
@@ -59,10 +65,26 @@ def grid_search_UL(
                 else:
                     raise ValueError("strategy must be 'A','B', or 'C'")
 
-            pnl = pnl_from_spread_changes(paths, sig)
-            score = sharpe_ratio(pnl)
+            # pnl_daily should be shape (N, T)
+            pnl_daily = pnl_from_spread_changes(paths, sig)
+
+            if pnl_daily.ndim == 1:
+                # if your function returns pooled pnl, we cannot replicate paper exactly
+                # but we'll force shape (N, T) requirement
+                raise ValueError("pnl_from_spread_changes must return shape (N, T) daily pnl per path")
+
+            # per-path cumulative return (paper CR)
+            CR_n = pnl_daily.sum(axis=1)          # shape (N,)
+
+            # per-path Sharpe, then average (paper SR)
+            SR_n = np.array([sharpe_ratio_annualized(pnl_daily[i, :], ann_factor=ann_factor) for i in range(N)])
+
+            CR = float(CR_n.mean())
+            SR = float(SR_n.mean())
+
+            score = SR if objective.upper() == "SR" else CR
 
             if score > best["score"]:
-                best = {"U": float(U), "L": float(L), "score": float(score)}
+                best = {"U": float(U), "L": float(L), "CR": CR, "SR": SR, "score": float(score)}
 
     return best
