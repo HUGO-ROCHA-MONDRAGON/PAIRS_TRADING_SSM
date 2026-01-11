@@ -16,6 +16,7 @@ def main():
     # 1) Load data + build pair
     # -----------------------------
     df = pd.read_excel("dataGQ.xlsx")
+    
 
     pair = extract_pair(df, "PEP US Equity", "KO US Equity")
     pair = pair.loc["2012-01-03":"2019-06-28"]
