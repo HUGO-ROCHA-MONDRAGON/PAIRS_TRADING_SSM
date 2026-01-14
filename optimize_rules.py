@@ -8,9 +8,15 @@ try:
     NUMBA_AVAILABLE = True
 except Exception:
     NUMBA_AVAILABLE = False
-    def njit(*args, **kwargs):
-        def wrap(f): return f
-        return wrap
+    def njit(func=None, **kwargs):
+        """Fallback decorator when numba is not available."""
+        def decorator(f):
+            return f
+        if func is not None:
+            # Called as @njit without arguments
+            return func
+        # Called as @njit(...) with arguments
+        return decorator
     def prange(x):  # type: ignore
         return range(x)
 
