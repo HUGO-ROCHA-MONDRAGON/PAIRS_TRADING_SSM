@@ -135,6 +135,9 @@ def _eval_path_C(x: np.ndarray, U: float, L: float, C: float, tc: float) -> Tupl
     Strategy C: Re-entry with stop-loss.
     - Open when crossing boundary toward mean
     - Close at mean (profit) OR stop-loss if crosses boundary away from mean
+    
+    KEY DIFFERENCE from A/B: PnL calculated using NEW position (after decision).
+    This is because crossing-based entry captures the move that triggered entry.
     """
     T = len(x)
     pos = 0
@@ -146,8 +149,6 @@ def _eval_path_C(x: np.ndarray, U: float, L: float, C: float, tc: float) -> Tupl
     
     for t in range(1, T):
         dx = x[t] - x[t-1]
-        pnl = pos * dx
-        
         prev = x[t-1]
         cur = x[t]
         
@@ -175,6 +176,9 @@ def _eval_path_C(x: np.ndarray, U: float, L: float, C: float, tc: float) -> Tupl
         elif pos == -1:
             if cross_down_C or stop_short:
                 new_pos = 0
+        
+        # KEY: Use NEW position for PnL (crossing-based entry)
+        pnl = new_pos * dx
         
         if new_pos != pos:
             pnl -= tc * abs(new_pos - pos)
@@ -330,7 +334,7 @@ def simulate_paths(
     T: int,
     seed: int = 42,
     standardize: bool = False,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, float, float]:
     """
     Simulate N paths of length T for the specified model.
     
@@ -351,15 +355,13 @@ def simulate_paths(
     -------
     paths : ndarray of shape (N, T)
         Simulated paths (raw, not standardized)
-    means : ndarray of shape (N,)
-        Mean of each path
-    stds : ndarray of shape (N,)
-        Std of each path
+    C : float
+        Global mean across ALL paths and time steps
+    sigma : float
+        Mean of per-path standard deviations (better matches paper results)
     """
     rng = np.random.default_rng(seed)
     paths = np.zeros((N, T))
-    means = np.zeros(N)
-    stds = np.zeros(N)
     
     for i in range(N):
         if model in ['model1', 'model2', 'model3']:
@@ -380,11 +382,16 @@ def simulate_paths(
         else:
             raise ValueError(f"Unknown model: {model}")
         
-        means[i] = x.mean()
-        stds[i] = x.std()
         paths[i] = x
     
-    return paths, means, stds
+    # Compute global mean across all paths and time steps
+    C = float(paths.mean())
+    
+    # Compute MEAN of per-path standard deviations
+    # This better matches paper results, especially for heteroscedastic models
+    sigma = float(np.mean([np.std(paths[i]) for i in range(N)]))
+    
+    return paths, C, sigma
 
 
 # =============================================================================
@@ -435,19 +442,17 @@ def run_table1_optimization(
     Table1Result
         Optimal thresholds and performance metrics
     """
-    # Simulate paths
-    paths, means, stds = simulate_paths(model, N, T, seed)
-    
-    # Global stats
-    C = means.mean()
-    sigma_avg = stds.mean()
+    # Simulate paths - returns global C and sigma
+    paths, C, sigma_avg = simulate_paths(model, N, T, seed)
     
     # Grid definition (sigma units)
     U_grid = np.arange(0.1, 2.55, 0.1)  # [0.1, 0.2, ..., 2.5]
     L_grid = np.arange(-2.5, -0.05, 0.1)  # [-2.5, -2.4, ..., -0.1]
     
-    # Transaction cost: 40bp round-trip (20bp per asset × 2)
-    tc = cost_bp / 10000 * 2
+    # Transaction cost: 20bp per trade
+    # Paper says "20bp per asset, 40bp per complete trading (round-trip)"
+    # This means each single trade (open OR close) costs 20bp
+    tc = cost_bp / 10000
     
     # Strategy ID
     strategy_id = {'A': 1, 'B': 2, 'C': 3}[strategy.upper()]
@@ -525,12 +530,8 @@ def replicate_table1(
         
         model_start = time.time()
         
-        # Simulate paths once per model (returns raw paths + stats)
-        paths, means, stds = simulate_paths(model, N, T, seed)
-        
-        # Compute global C and sigma for threshold calculation
-        C = means.mean()
-        sigma_avg = stds.mean()
+        # Simulate paths once per model - returns GLOBAL C and sigma
+        paths, C, sigma_avg = simulate_paths(model, N, T, seed)
         
         if verbose:
             print(f"  Paths simulated in {time.time() - model_start:.1f}s (C={C:.6f}, σ={sigma_avg:.6f})")
@@ -538,7 +539,8 @@ def replicate_table1(
         # Grid (in sigma units)
         U_grid = np.arange(0.1, 2.55, 0.1)
         L_grid = np.arange(-2.5, -0.05, 0.1)
-        tc = cost_bp / 10000 * 2
+        # Transaction cost: 20bp per trade (paper: "40bp per complete trading" = round-trip)
+        tc = cost_bp / 10000
         
         for strategy in strategies:
             strat_start = time.time()

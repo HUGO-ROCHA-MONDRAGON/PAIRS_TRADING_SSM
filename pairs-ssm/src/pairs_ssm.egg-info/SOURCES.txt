@@ -19,6 +19,7 @@ src/pairs_ssm/filtering/__init__.py
 src/pairs_ssm/filtering/kalman_extended.py
 src/pairs_ssm/filtering/kalman_linear.py
 src/pairs_ssm/filtering/mle.py
+src/pairs_ssm/filtering/qmckf.py
 src/pairs_ssm/models/__init__.py
 src/pairs_ssm/models/base_ssm.py
 src/pairs_ssm/models/model_I.py
@@ -28,6 +29,7 @@ src/pairs_ssm/models/params.py
 src/pairs_ssm/optimization/__init__.py
 src/pairs_ssm/optimization/objective.py
 src/pairs_ssm/optimization/simulator.py
+src/pairs_ssm/optimization/table1.py
 src/pairs_ssm/optimization/threshold_grid.py
 src/pairs_ssm/reporting/__init__.py
 src/pairs_ssm/reporting/export.py
