@@ -9,7 +9,7 @@ Three benchmark strategies:
 
 import numpy as np
 import pandas as pd
-from typing import Union, Literal
+from typing import Union, Literal, List, Dict
 
 
 def _to_numpy(spread: Union[pd.Series, np.ndarray]) -> tuple:
@@ -198,6 +198,91 @@ def strategy_C_signals(
     return pd.Series(sig, index=idx, name="signal")
 
 
+def strategy_C_signals_timevarying(
+    spread: Union[pd.Series, np.ndarray],
+    U_t: Union[pd.Series, np.ndarray],
+    L_t: Union[pd.Series, np.ndarray],
+    C: float,
+) -> pd.Series:
+    """
+    Strategy C with time-varying boundaries for heteroscedastic models.
+    
+    As described in Zhang (2021) Figure 3(b), in the heteroscedastic model,
+    the boundaries U_t and L_t vary over time based on the filtered volatility:
+        U_t = μ + k·σ_t
+        L_t = μ - k·σ_t
+    
+    where σ_t = √P_t is the filtered standard deviation at each time step.
+    
+    Entry rules (same as Strategy C):
+    - Enter SHORT when spread re-enters from above U_t (prev > U_{t-1}, curr <= U_t)
+    - Enter LONG when spread re-enters from below L_t (prev < L_{t-1}, curr >= L_t)
+    
+    Exit rules:
+    - Take profit at mean C
+    - Stop-loss if spread crosses boundary wrong way after entry
+    
+    Parameters
+    ----------
+    spread : array-like
+        Spread series (filtered)
+    U_t : array-like
+        Time-varying upper threshold series (same length as spread)
+    L_t : array-like
+        Time-varying lower threshold series (same length as spread)
+    C : float
+        Mean (take-profit level, constant)
+        
+    Returns
+    -------
+    pd.Series
+        Signal series: +1 (long), -1 (short), 0 (flat)
+    """
+    x, idx = _to_numpy(spread)
+    U_arr = np.asarray(U_t, dtype=float)
+    L_arr = np.asarray(L_t, dtype=float)
+    
+    n = len(x)
+    sig = np.zeros(n, dtype=np.int8)
+    
+    pos = 0
+    
+    for t in range(1, n):
+        prev_x, curr_x = x[t - 1], x[t]
+        prev_U, curr_U = U_arr[t - 1], U_arr[t]
+        prev_L, curr_L = L_arr[t - 1], L_arr[t]
+        
+        # Entry signals (using time-varying boundaries)
+        entry_short = (prev_x > prev_U) and (curr_x <= curr_U)  # Re-enter from above
+        entry_long = (prev_x < prev_L) and (curr_x >= curr_L)   # Re-enter from below
+        
+        # Exit at mean
+        cross_down_C = (prev_x > C) and (curr_x <= C)
+        cross_up_C = (prev_x < C) and (curr_x >= C)
+        
+        # Stop-loss: wrong-way crossing
+        stop_short = (prev_x < prev_U) and (curr_x >= curr_U)  # Breaks out again
+        stop_long = (prev_x > prev_L) and (curr_x <= curr_L)   # Breaks down again
+        
+        if pos == 0:
+            if entry_short:
+                pos = -1
+            elif entry_long:
+                pos = +1
+        elif pos == -1:
+            if cross_down_C or stop_short:
+                pos = 0
+        elif pos == +1:
+            if cross_up_C or stop_long:
+                pos = 0
+        
+        sig[t] = pos
+    
+    if idx is None:
+        return pd.Series(sig, name="signal")
+    return pd.Series(sig, index=idx, name="signal")
+
+
 def generate_signals(
     spread: Union[pd.Series, np.ndarray],
     U: float,
@@ -258,3 +343,79 @@ def signals_to_positions(
         Position series
     """
     return signals * position_size
+
+
+def find_trades(signals: pd.Series) -> List[Dict]:
+    """
+    Find trade entry and exit points from signals.
+    
+    For Strategy A and C where positions return to 0 before next trade.
+    
+    Parameters
+    ----------
+    signals : pd.Series
+        Signal series (+1, -1, 0)
+        
+    Returns
+    -------
+    List[Dict]
+        List of trades with 'entry', 'exit', and 'type' keys
+    """
+    trades = []
+    in_trade = False
+    entry_idx = None
+    trade_type = None
+    
+    for t in range(1, len(signals)):
+        if not in_trade and signals.iloc[t] != 0:
+            in_trade = True
+            entry_idx = signals.index[t]
+            trade_type = 'short' if signals.iloc[t] == -1 else 'long'
+        elif in_trade and signals.iloc[t] == 0:
+            trades.append({'entry': entry_idx, 'exit': signals.index[t], 'type': trade_type})
+            in_trade = False
+    
+    return trades
+
+
+def find_trades_B(signals: pd.Series) -> List[Dict]:
+    """
+    Find trades for Strategy B where positions flip directly (no return to 0).
+    
+    In Strategy B, we hold until we need to switch position, so clear and open
+    happen at the same time.
+    
+    Parameters
+    ----------
+    signals : pd.Series
+        Signal series from strategy_B_signals
+        
+    Returns
+    -------
+    List[Dict]
+        List of trades with 'entry', 'exit', and 'type' keys
+    """
+    trades = []
+    entry_idx = None
+    trade_type = None
+    prev_sig = 0
+    
+    for t in range(1, len(signals)):
+        curr_sig = signals.iloc[t]
+        
+        # Detect position change
+        if curr_sig != prev_sig:
+            # Close previous trade if we had one
+            if entry_idx is not None:
+                trades.append({'entry': entry_idx, 'exit': signals.index[t], 'type': trade_type})
+            
+            # Open new trade if not flat
+            if curr_sig != 0:
+                entry_idx = signals.index[t]
+                trade_type = 'short' if curr_sig == -1 else 'long'
+            else:
+                entry_idx = None
+        
+        prev_sig = curr_sig
+    
+    return trades
