@@ -2,8 +2,8 @@ import pandas as pd
 
 from data_loader import extract_pair
 from strategies import strategy_A_signals,strategy_B_signals,strategy_C_signals
-from backtest import backtest_pair
-from backtest import estimate_gamma_ols, compute_spread  # or wherever you placed them
+from legacy_code.backtest import backtest_pair
+from legacy_code.backtest import estimate_gamma_ols, compute_spread  # or wherever you placed them
 from plots import plot_spread_with_signals
 
 def restrict_dates(df, start, end):
