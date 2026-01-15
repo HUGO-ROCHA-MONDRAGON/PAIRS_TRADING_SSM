@@ -35,6 +35,7 @@ class ModelParams:
     # Non-Gaussian parameters (optional)
     mix_prob: float = 0.0        # Mixture probability
     mix_scale: float = 3.0       # Outlier scale factor
+    nu: float = float('inf')     # Degrees of freedom for t-distribution (inf = Gaussian)
     
     @property
     def q(self) -> float:
@@ -54,7 +55,7 @@ class ModelParams:
     @property
     def is_gaussian(self) -> bool:
         """Check if innovations are Gaussian."""
-        return self.mix_prob < 1e-10
+        return self.mix_prob < 1e-10 and self.nu > 100
     
     @property
     def long_run_mean(self) -> float:
