@@ -1,0 +1,134 @@
+# =============================================================================
+# DEFAULT CONFIGURATION
+# =============================================================================
+# Main configuration file for pairs trading with state-space models
+
+# -----------------------------------------------------------------------------
+# DATA SETTINGS
+# -----------------------------------------------------------------------------
+data:
+  raw_path: "data/raw"
+  interim_path: "data/interim"
+  processed_path: "data/processed"
+  
+  # Data source file
+  source_file: "dataGQ.xlsx"
+  
+# -----------------------------------------------------------------------------
+# PAIR SETTINGS
+# -----------------------------------------------------------------------------
+pair:
+  # Asset identifiers (column names in data file)
+  asset_a: "PEP US Equity"
+  asset_b: "KO US Equity"
+  
+  # Sample period
+  start_date: "2012-01-03"
+  end_date: "2019-06-28"
+  
+  # Price transformation
+  use_log_prices: true
+
+# -----------------------------------------------------------------------------
+# MODEL SETTINGS
+# -----------------------------------------------------------------------------
+model:
+  # Model type: "model_I" (linear) or "model_II" (heteroscedastic)
+  type: "model_II"
+  
+  # Estimation method: "mle" or "bayesian"
+  estimation: "mle"
+  
+  # Optimizer settings
+  optimizer:
+    method: "Nelder-Mead"  # or "L-BFGS-B", "differential_evolution"
+    maxiter: 2000
+    tolerance: 1.0e-6
+
+# -----------------------------------------------------------------------------
+# FILTERING SETTINGS
+# -----------------------------------------------------------------------------
+filtering:
+  # Filter type: "standard", "extended", "unscented", "qmckf"
+  filter_type: "extended"
+  
+  # QMCKF specific (if used)
+  n_particles: 500
+  
+  # Initialization
+  diffuse_init: true
+  init_scale: 10.0
+
+# -----------------------------------------------------------------------------
+# OPTIMIZATION SETTINGS (Threshold Selection)
+# -----------------------------------------------------------------------------
+optimization:
+  # Grid for threshold search (in units of sigma)
+  grid:
+    U_min: 0.1
+    U_max: 2.5
+    U_step: 0.1
+    L_min: -2.5
+    L_max: -0.1
+    L_step: 0.1
+  
+  # Monte Carlo simulation
+  simulation:
+    n_paths: 2000
+    n_steps: 1000  # ~4 years of daily data
+  
+  # Objective function: "CR" (cumulative return) or "SR" (Sharpe ratio)
+  objective: "SR"
+  
+  # Annualization factor (252 for daily data)
+  annualization: 252
+
+# -----------------------------------------------------------------------------
+# TRADING SETTINGS
+# -----------------------------------------------------------------------------
+trading:
+  # Strategy: "A", "B", or "C"
+  strategy: "C"
+  
+  # Transaction costs (basis points per asset per trade)
+  tc_bps: 20
+  
+  # Position sizing
+  position_size: 1.0  # Normalized to 1 share of asset A
+
+# -----------------------------------------------------------------------------
+# BACKTEST SETTINGS
+# -----------------------------------------------------------------------------
+backtest:
+  # Train/test split
+  train_ratio: 0.7
+  
+  # Walk-forward settings
+  refit_frequency: "quarterly"  # or "monthly", "yearly", "none"
+  
+  # Minimum training period (days)
+  min_train_days: 252
+
+# -----------------------------------------------------------------------------
+# REPORTING SETTINGS
+# -----------------------------------------------------------------------------
+reporting:
+  # Output formats
+  output_dir: "outputs"
+  formats: ["csv", "html"]
+  
+  # Figures
+  figure_dpi: 150
+  figure_format: "png"
+
+# -----------------------------------------------------------------------------
+# RANDOM SEED
+# -----------------------------------------------------------------------------
+seed: 42
+
+# -----------------------------------------------------------------------------
+# LOGGING
+# -----------------------------------------------------------------------------
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "logs/pairs_ssm.log"

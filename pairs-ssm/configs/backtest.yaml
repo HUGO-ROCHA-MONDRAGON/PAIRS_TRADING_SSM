@@ -1,0 +1,119 @@
+# =============================================================================
+# BACKTEST CONFIGURATION
+# =============================================================================
+# Settings for walk-forward backtesting
+
+# -----------------------------------------------------------------------------
+# STRATEGIES
+# -----------------------------------------------------------------------------
+strategies:
+  
+  # Strategy A: Enter at boundary, exit at mean
+  A:
+    name: "Boundary Entry, Mean Exit"
+    description: |
+      - Enter SHORT when spread >= U (sell spread)
+      - Enter LONG when spread <= L (buy spread)
+      - Exit (close) when spread crosses mean C
+      - Hold until exit condition
+    entry: "boundary"
+    exit: "mean"
+    allow_flip: false
+  
+  # Strategy B: Enter on boundary crossing, exit on opposite crossing
+  B:
+    name: "Boundary Crossing"
+    description: |
+      - Enter SHORT when spread crosses UP through U
+      - Enter LONG when spread crosses DOWN through L
+      - Exit when opposite boundary is crossed
+      - Can flip positions directly
+    entry: "crossing_up"
+    exit: "opposite_boundary"
+    allow_flip: true
+  
+  # Strategy C: Enter on re-entry, exit at mean or stop-loss
+  C:
+    name: "Re-entry with Stop-loss"
+    description: |
+      - Enter SHORT when spread re-enters from above U (prev > U, curr <= U)
+      - Enter LONG when spread re-enters from below L (prev < L, curr >= L)
+      - Exit at mean C (take profit)
+      - Stop-loss if spread crosses boundary wrong way after entry
+    entry: "reentry"
+    exit: "mean_or_stop"
+    allow_flip: false
+
+# -----------------------------------------------------------------------------
+# WALK-FORWARD SETTINGS
+# -----------------------------------------------------------------------------
+walk_forward:
+  # Type: "expanding" or "rolling"
+  type: "expanding"
+  
+  # Initial training window (days)
+  initial_train: 504  # ~2 years
+  
+  # Test window (days)
+  test_window: 63  # ~1 quarter
+  
+  # Refit schedule
+  refit_every: 63  # Refit model every quarter
+  
+  # Re-optimize thresholds
+  reoptimize_thresholds: true
+  reoptimize_every: 252  # Re-optimize yearly
+
+# -----------------------------------------------------------------------------
+# TRAIN/TEST SPLIT (Simple mode)
+# -----------------------------------------------------------------------------
+simple_split:
+  enabled: false
+  train_start: "2012-01-03"
+  train_end: "2016-12-30"
+  test_start: "2017-01-03"
+  test_end: "2019-06-28"
+
+# -----------------------------------------------------------------------------
+# PERFORMANCE METRICS
+# -----------------------------------------------------------------------------
+metrics:
+  # Primary metrics to compute
+  primary:
+    - cumulative_return
+    - annualized_return
+    - sharpe_ratio
+    - sortino_ratio
+    - max_drawdown
+    - calmar_ratio
+  
+  # Trade statistics
+  trade_stats:
+    - n_trades
+    - win_rate
+    - avg_profit
+    - avg_loss
+    - profit_factor
+    - avg_holding_period
+  
+  # Risk metrics
+  risk:
+    - volatility
+    - downside_volatility
+    - var_95
+    - cvar_95
+
+# -----------------------------------------------------------------------------
+# BENCHMARKS
+# -----------------------------------------------------------------------------
+benchmarks:
+  # Compare against naive strategies
+  naive:
+    - buy_and_hold_spread
+    - fixed_thresholds  # e.g., ±1 sigma, ±2 sigma
+  
+  # Fixed threshold values to compare
+  fixed_thresholds_values:
+    - [1.0, -1.0]   # ±1 sigma
+    - [1.5, -1.5]   # ±1.5 sigma
+    - [2.0, -2.0]   # ±2 sigma

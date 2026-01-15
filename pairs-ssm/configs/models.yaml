@@ -1,0 +1,138 @@
+# =============================================================================
+# MODEL SPECIFICATIONS
+# =============================================================================
+# State-space model definitions following Zhang (2021)
+
+# -----------------------------------------------------------------------------
+# MODEL I: Linear Gaussian (Standard Kalman Filter)
+# -----------------------------------------------------------------------------
+# State equation:  x_{t+1} = θ₀ + θ₁ x_t + w_t,  w_t ~ N(0, q)
+# Observation eq:  y_t = x_t + v_t,              v_t ~ N(0, r)
+
+model_I:
+  name: "Linear Gaussian AR(1)"
+  description: "Standard mean-reverting spread model"
+  
+  # Parameter constraints
+  constraints:
+    theta1:
+      min: -0.999
+      max: 0.999
+      description: "AR(1) coefficient (stationarity required)"
+    q:
+      min: 1.0e-10
+      max: null
+      description: "State noise variance"
+    r:
+      min: 1.0e-10
+      max: null
+      description: "Observation noise variance"
+  
+  # Filter type
+  filter: "standard"
+  
+  # Number of free parameters
+  n_params: 4  # theta0, theta1, q, r
+
+# -----------------------------------------------------------------------------
+# MODEL II: Heteroscedastic (Extended Kalman Filter)
+# -----------------------------------------------------------------------------
+# State equation:  x_{t+1} = θ₀ + θ₁ x_t + σ(x_t) w_t
+#                  σ(x_t) = sqrt(q_base + q_het * x_t²)
+# Observation eq:  y_t = x_t + v_t,  v_t ~ N(0, r)
+
+model_II:
+  name: "Heteroscedastic AR(1)"
+  description: "State-dependent volatility model"
+  
+  # Parameter constraints
+  constraints:
+    theta1:
+      min: -0.999
+      max: 0.999
+    q_base:
+      min: 1.0e-10
+      max: null
+      description: "Base state noise variance"
+    q_het:
+      min: 0.0
+      max: null
+      description: "Heteroscedasticity coefficient"
+    r:
+      min: 1.0e-10
+      max: null
+  
+  # Filter type
+  filter: "extended"
+  
+  # Number of free parameters
+  n_params: 5  # theta0, theta1, q_base, q_het, r
+
+# -----------------------------------------------------------------------------
+# SIMULATION-ONLY MODELS (Table 1 in paper)
+# -----------------------------------------------------------------------------
+# These are used for Monte Carlo threshold optimization, not for real data fitting
+
+simulation_models:
+  
+  # Model 1: Simple AR(1)
+  model_1:
+    name: "Simple AR(1)"
+    description: "x_{t+1} = 0.9590 * x_t + 0.0049 * η_t"
+    theta0: 0.0
+    theta1: 0.9590
+    sigma: 0.0049
+    nonlinear: false
+    heteroscedastic: false
+  
+  # Model 2: Nonlinear AR(1) with quadratic term
+  model_2:
+    name: "Nonlinear AR(1)"
+    description: "x_{t+1} = 0.9 * x_t + 0.2590 * x_t² + 0.0049 * η_t"
+    theta0: 0.0
+    theta1: 0.9
+    theta2: 0.2590  # Quadratic coefficient
+    sigma: 0.0049
+    nonlinear: true
+    heteroscedastic: false
+  
+  # Model 3: Heteroscedastic AR(1)
+  model_3:
+    name: "Heteroscedastic AR(1)"
+    description: "x_{t+1} = 0.9590 * x_t + sqrt(0.00089 + 0.08 * x_t²) * η_t"
+    theta0: 0.0
+    theta1: 0.9590
+    q_base: 0.00089
+    q_het: 0.08
+    nonlinear: false
+    heteroscedastic: true
+  
+  # Model 4: Non-Gaussian innovations (mixture)
+  model_4:
+    name: "Non-Gaussian AR(1)"
+    description: "AR(1) with mixture of normals innovations"
+    theta0: 0.0
+    theta1: 0.9590
+    sigma: 0.0049
+    mixture:
+      prob: 0.05      # Probability of outlier
+      scale: 3.0      # Outlier scale relative to main
+    nonlinear: false
+    heteroscedastic: false
+    non_gaussian: true
+  
+  # Model 5: Combined (nonlinear + heteroscedastic + non-Gaussian)
+  model_5:
+    name: "Full Nonlinear Model"
+    description: "Combined nonlinearity, heteroscedasticity, and non-Gaussianity"
+    theta0: 0.0
+    theta1: 0.9
+    theta2: 0.2590
+    q_base: 0.00089
+    q_het: 0.08
+    mixture:
+      prob: 0.05
+      scale: 3.0
+    nonlinear: true
+    heteroscedastic: true
+    non_gaussian: true
