@@ -19,6 +19,7 @@ from pairs_ssm.filtering.qmckf import (
     state_noise_std,
 )
 from pairs_ssm.filtering.mle import fit_model, compare_models
+from pairs_ssm.filtering.mle_joint import fit_joint, compare_estimation_methods
 
 __all__ = [
     # Linear Kalman
@@ -37,4 +38,7 @@ __all__ = [
     # MLE
     "fit_model",
     "compare_models",
+    # Joint MLE (paper method)
+    "fit_joint",
+    "compare_estimation_methods",
 ]

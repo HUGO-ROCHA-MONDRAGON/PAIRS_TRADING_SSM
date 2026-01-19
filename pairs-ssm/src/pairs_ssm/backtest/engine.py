@@ -135,7 +135,18 @@ class BacktestEngine:
         
         # Thresholds using ModelParams properties
         mu = self.params.long_run_mean
-        sigma = self.params.long_run_std
+        
+        # DETERMINE SIGMA (Standard Deviation)
+        if not self.params.is_homoscedastic:
+            # Model II: Time-varying volatility
+            # sigma_t = sqrt(q_base + q_het * x_hat^2)
+            # We use the spread itself to drive the volatility estimate
+            x_arr = spread.values
+            var_t = self.params.q_base + self.params.q_het * x_arr**2
+            sigma = np.sqrt(np.maximum(var_t, 1e-12))
+        else:
+            # Model I: Constant volatility
+            sigma = self.params.long_run_std
         
         U = mu + n_std * sigma
         L = mu - n_std * sigma
@@ -204,9 +215,10 @@ class BacktestEngine:
         stats["gamma"] = self.spread_data.gamma
         
         if self.params is not None:
-            stats["mu"] = self.params.mu
-            stats["phi"] = self.params.phi
-            stats["q"] = self.params.q
+            stats["theta0"] = self.params.theta0
+            stats["theta1"] = self.params.theta1
+            stats["q_base"] = self.params.q_base
+            stats["q_het"] = self.params.q_het
             stats["r"] = self.params.r
         
         return stats

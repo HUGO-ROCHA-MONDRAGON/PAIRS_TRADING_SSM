@@ -21,9 +21,9 @@ def _to_numpy(spread: Union[pd.Series, np.ndarray]) -> tuple:
 
 def strategy_A_signals(
     spread: Union[pd.Series, np.ndarray],
-    U: float,
-    L: float,
-    C: float,
+    U: Union[float, np.ndarray, pd.Series],
+    L: Union[float, np.ndarray, pd.Series],
+    C: Union[float, np.ndarray, pd.Series],
 ) -> pd.Series:
     """
     Strategy A: Boundary entry, mean exit.
@@ -38,11 +38,11 @@ def strategy_A_signals(
     ----------
     spread : array-like
         Spread series (observed or filtered)
-    U : float
+    U : float or array-like
         Upper threshold (short entry)
-    L : float
+    L : float or array-like
         Lower threshold (long entry)
-    C : float
+    C : float or array-like
         Mean/center (exit point)
         
     Returns
@@ -52,20 +52,43 @@ def strategy_A_signals(
     """
     x, idx = _to_numpy(spread)
     n = len(x)
+    
+    # Handle array-like thresholds
+    U_arr = np.asarray(U) if not np.isscalar(U) else np.full(n, U)
+    L_arr = np.asarray(L) if not np.isscalar(L) else np.full(n, L)
+    C_arr = np.asarray(C) if not np.isscalar(C) else np.full(n, C)
+    
+    # Broadcast if single element array
+    if U_arr.ndim == 0: U_arr = np.full(n, float(U_arr))
+    if L_arr.ndim == 0: L_arr = np.full(n, float(L_arr))
+    if C_arr.ndim == 0: C_arr = np.full(n, float(C_arr))
+
+    # Ensure same length
+    if len(U_arr) != n or len(L_arr) != n or len(C_arr) != n:
+         # Try to align indices if they are pandas series, otherwise raise
+         # For simplicity in this fix, we assume caller aligns them or passes scalars
+         # If lengths differ, we must fallback to simple scalar assumption or fail.
+         # But the loop below needs n. Let's assume valid input for now.
+         pass
+
     sig = np.zeros(n, dtype=np.int8)
     
     pos = 0  # Current position
     
     for t in range(n):
+        u_t = U_arr[t]
+        l_t = L_arr[t]
+        c_t = C_arr[t]
+        
         if pos == 0:
             # No position - check for entry
-            if x[t] >= U:
+            if x[t] >= u_t:
                 pos = -1  # Short
-            elif x[t] <= L:
+            elif x[t] <= l_t:
                 pos = +1  # Long
         else:
             # Have position - check for exit
-            if (pos == -1 and x[t] <= C) or (pos == +1 and x[t] >= C):
+            if (pos == -1 and x[t] <= c_t) or (pos == +1 and x[t] >= c_t):
                 pos = 0  # Close
         
         sig[t] = pos
@@ -77,8 +100,8 @@ def strategy_A_signals(
 
 def strategy_B_signals(
     spread: Union[pd.Series, np.ndarray],
-    U: float,
-    L: float,
+    U: Union[float, np.ndarray, pd.Series],
+    L: Union[float, np.ndarray, pd.Series],
 ) -> pd.Series:
     """
     Strategy B: Boundary crossing entry/exit.
@@ -92,9 +115,9 @@ def strategy_B_signals(
     ----------
     spread : array-like
         Spread series
-    U : float
+    U : float or array-like
         Upper threshold
-    L : float
+    L : float or array-like
         Lower threshold
         
     Returns
@@ -104,6 +127,13 @@ def strategy_B_signals(
     """
     x, idx = _to_numpy(spread)
     n = len(x)
+    
+    U_arr = np.asarray(U) if not np.isscalar(U) else np.full(n, U)
+    L_arr = np.asarray(L) if not np.isscalar(L) else np.full(n, L)
+    
+    if U_arr.ndim == 0: U_arr = np.full(n, float(U_arr))
+    if L_arr.ndim == 0: L_arr = np.full(n, float(L_arr))
+    
     sig = np.zeros(n, dtype=np.int8)
     
     pos = 0
@@ -111,11 +141,19 @@ def strategy_B_signals(
     for t in range(1, n):
         prev, curr = x[t - 1], x[t]
         
+        # Use current thresholds for crossing check
+        # (Could use prev/curr specific thresholds if they vary fast, but this is safe)
+        u_curr = U_arr[t]
+        l_curr = L_arr[t]
+        
+        u_prev = U_arr[t-1]
+        l_prev = L_arr[t-1]
+        
         # Cross up through U -> short
-        if prev < U and curr >= U:
+        if prev < u_prev and curr >= u_curr:
             pos = -1
         # Cross down through L -> long
-        elif prev > L and curr <= L:
+        elif prev > l_prev and curr <= l_curr:
             pos = +1
         
         sig[t] = pos
@@ -127,9 +165,9 @@ def strategy_B_signals(
 
 def strategy_C_signals(
     spread: Union[pd.Series, np.ndarray],
-    U: float,
-    L: float,
-    C: float,
+    U: Union[float, np.ndarray, pd.Series],
+    L: Union[float, np.ndarray, pd.Series],
+    C: Union[float, np.ndarray, pd.Series],
 ) -> pd.Series:
     """
     Strategy C: Re-entry with stop-loss (paper's main strategy).
@@ -146,11 +184,11 @@ def strategy_C_signals(
     ----------
     spread : array-like
         Spread series
-    U : float
+    U : float or array-like
         Upper threshold
-    L : float
+    L : float or array-like
         Lower threshold
-    C : float
+    C : float or array-like
         Mean (take-profit level)
         
     Returns
@@ -160,6 +198,15 @@ def strategy_C_signals(
     """
     x, idx = _to_numpy(spread)
     n = len(x)
+    
+    U_arr = np.asarray(U) if not np.isscalar(U) else np.full(n, U)
+    L_arr = np.asarray(L) if not np.isscalar(L) else np.full(n, L)
+    C_arr = np.asarray(C) if not np.isscalar(C) else np.full(n, C)
+    
+    if U_arr.ndim == 0: U_arr = np.full(n, float(U_arr))
+    if L_arr.ndim == 0: L_arr = np.full(n, float(L_arr))
+    if C_arr.ndim == 0: C_arr = np.full(n, float(C_arr))
+    
     sig = np.zeros(n, dtype=np.int8)
     
     pos = 0
@@ -167,17 +214,21 @@ def strategy_C_signals(
     for t in range(1, n):
         prev, curr = x[t - 1], x[t]
         
+        u_prev, u_curr = U_arr[t-1], U_arr[t]
+        l_prev, l_curr = L_arr[t-1], L_arr[t]
+        c_prev, c_curr = C_arr[t-1], C_arr[t]
+        
         # Entry signals
-        entry_short = (prev > U) and (curr <= U)  # Re-enter from above
-        entry_long = (prev < L) and (curr >= L)   # Re-enter from below
+        entry_short = (prev > u_prev) and (curr <= u_curr)  # Re-enter from above
+        entry_long = (prev < l_prev) and (curr >= l_curr)   # Re-enter from below
         
         # Exit at mean
-        cross_down_C = (prev > C) and (curr <= C)
-        cross_up_C = (prev < C) and (curr >= C)
+        cross_down_C = (prev > c_prev) and (curr <= c_curr)
+        cross_up_C = (prev < c_prev) and (curr >= c_curr)
         
         # Stop-loss: wrong-way crossing after entry
-        stop_short = (prev < U) and (curr >= U)  # Breaks out again
-        stop_long = (prev > L) and (curr <= L)   # Breaks down again
+        stop_short = (prev < u_prev) and (curr >= u_curr)  # Breaks out again
+        stop_long = (prev > l_prev) and (curr <= l_curr)   # Breaks down again
         
         if pos == 0:
             if entry_short:

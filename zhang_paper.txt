@@ -1,0 +1,3078 @@
+Quantitative Finance, 2021
+Vol. 21, No. 9, 1567–1587, https://doi.org/10.1080/14697688.2021.1890806
+
+Pairs trading with general state space models
+GUANG ZHANG*
+Department of Economics, Boston University, Boston, MA 02215, USA
+(Received 3 June 2020; accepted 5 February 2021; published online 26 March 2021 )
+This study examines pairs trading using a general state space model framework. It models the
+spread between the prices of two assets as an unobservable state variable assuming that it follows a
+mean-reverting process. This new model has two distinctive features: the (1) non-Gaussianity and
+heteroscedasticity of innovations to the spread, and (2) nonlinearity of the mean reversion of the
+spread. It shows how to use the filtered spread as the trading indicator in carrying out statistical
+arbitrage and proposes a new trading strategy which uses a Monte Carlo-based approach to selecting
+the optimal trading rule. The new model and trading strategy are illustrated by two examples: PEP
+vs. KO and EWT vs. EWH. The empirical results show that the new approach can achieve 21.86%
+(31.84%) annualized return for the PEP-KO (EWT-EWH) pair. Then all the possible pairs among the
+five largest and the five smallest U.S. banks listed on the NYSE are considered. For these pairs, the
+performance of the proposed approach with that of the existing popular approaches, are compared
+both in-sample and out-of-sample. In almost all the cases considered, our approach can significantly
+improve the return and the Sharpe ratio.
+Keywords: Pairs trading; State space models; Mean-reverting; Heteroscedasticity; Quasi Monte
+Carlo Kalman filter
+JEL codes: C11, C32, C41, G11, G17
+
+https://www.youtube.com/watch?
+v=Ufcv_WLuKo4
+
+1. Introduction
+In the early 1980s, a group of physicists, mathematicians
+and computer scientists, led by quantitative analyst Nunzio Tartaglia, used a sophisticated statistical approach to
+find opportunities for arbitrage trading (Gatev et al. 2006).
+Tartaglia’s strategy, later coined pairs trading, is to find a
+pair of stocks whose prices have moved simultaneously historically, and make a profit by applying simple contrarian
+principles. Since then, pairs trading has become a popular
+short-term arbitrage strategy used by hedge funds and is often
+considered as the ‘ancestor’ of statistical arbitrage.
+Pairs trading is a self-financing portfolio constructed with a
+long position in one security and a short position in the other.
+Given that the two securities have moved together historically, when a temporary anomaly occurs, one security would
+be overvalued, compared with the other, relative to the longterm equilibrium. An investor may be able to make money
+by selling the overvalued security, buying the undervalued
+security, and clearing the exposure when the two securities
+revert to their long-term equilibrium. Because the effect of the
+market’s movement is hedged by this self-financing portfolio,
+pairs trading is market-neutral.
+
+*Email: gzhang46@bu.edu
+
+The methods for pairs trading can be broadly divided into
+nonparametric and parametric methods. In particular, Gatev et
+al. (2006) proposed a nonparametric distance-based approach
+to determine the securities for constructing the pairs. A pair
+is chosen by finding the securities that minimize the sum
+of squared deviations between two normalized prices. They
+argued that this approach ‘best approximates the description
+of how traders themselves choose pairs.’ They found that
+average annualized excess returns reach 11% for the top portfolio pairs using CRSP daily data from 1962 to 2002. Other
+nonparametric methods on pairs trading can also be found in
+Bogomolov (2013), among others. Overall, the nonparametric distance-based approach provides a simple and general
+method for selecting ‘good’ pairs; however, as Krauss (2017)
+and others point out, this selection metric is prone to choosing
+pairs with a small variance of the spread, and thereby limiting
+the profitability of pairs trading.
+By contrast, the parametric approach tries to capture the
+mean-reverting characteristic of the spread using a parametric
+model. For example, Elliott et al. (2005) proposed a meanreverting Gaussian Markov chain model for the spread that
+is observed with Gaussian noise. For other parametric methods of pairs trading see Vidyamurthy (2004), Cummins and
+Bucca (2012), Tourin and Yan (2013), Moura et al. (2016),
+Stübinger and Endres (2018), Clegg and Krauss (2018), Elliott
+and Bradrania (2018), and Bai and Wu (2018). Overall, the
+
+© 2021 Informa UK Limited, trading as Taylor & Francis Group
+
+1568
+
+G. Zhang
+
+parametric approach provides tractable methods for the analysis of pairs trading. However, most of the existing parametric
+models are too simple to be capable of capturing the dynamics of asset prices, which substantially limits the returns from
+pairs trading.
+Compared with existing methods of pairs trading, the
+proposed approach has the following features:
+(1) It is based on a general state space model that includes
+a nonlinear non-Gaussian model. This model can capture several stylized features of financial asset prices,
+including heavy-tailedness, heteroscedasticity, volatility clustering and nonlinear dependence;
+(2) The trading strategy is different from existing ones.
+It uses the model’s features such as heteroscedasticity
+and volatility clustering, and it can potentially achieve
+significantly higher returns and Sharpe ratios;
+(3) The optimal trading rule is also different from the
+existing ones. Although this rule has no analytic solution, we show that it can be computed effectively using
+simulation; and finally,
+(4) The optimal trading rule can adapt to various objectives, such as a high cumulative return, Sharpe ratio,
+or Calmar ratio.
+This approach is applied to two pairs: PEP vs. KO and EWT
+vs. EWH. Our new approach achieves an annualized return
+of 0.2186 (0.3184) and a Sharpe ratio of 2.9518 (3.8892) on
+the PEP-KO (EWT-EWH) pair. In comparison, a conventional
+approach applied to the same pairs can only achieve an annualized return of 0.1311 (0.1480) and a Sharpe ratio of 1.1003
+(1.1277) for the PEP-KO (EWT-EWH) pair. Next, we test the
+approach using all the possible pairs among the largest five
+banks and the smallest five banks listed on the NYSE to find
+significant improvements over the conventional approach for
+almost all the pairs. We also find that pairs of small banks
+produce higher returns than the pairs of large banks. This
+is likely because the spread between small banks is more
+volatile, providing more opportunities for active trading.
+The remainder of this paper is organized as follows.
+Section 2 proposes a new model for pairs trading. Section 3
+proposes a new trading strategy based on the mean-reverting
+property of spreads, and compares it with conventional trading strategies using simulation. Section 4 implements the
+proposed approach on actual data, and in Section 5 the
+conclusions are presented.
+
+2. A new model for pairs trading
+I propose the following general state space model with the
+linear observable process for pairs trading:
+PA,t = λ + γ PB,t + xt + εt
+
+(1)
+
+xt+1 = f (xt ; θ ) + g (xt ; θ ) ∗ ηt
+
+(2)
+
+where PA is the price of security A; PB is the price of security
+B; γ is the hedge ratio between the two securities; and x is the
+unobservable true spread between PA and PB . I assume that
+x follows a mean-reverting process as in (2), εt ∼ N(0, σε2 ),
+
+and ηt ∼ p(ηt ; θ ). Popular choices for f, g and p can be the
+following. Our framework applies to all of them.
+• Linear mean-reverting (Ornstein–Uhlenbeck process): f (xt ; θ ) = θ1 + θ2 xt
+• Nonlinear mean-reverting model: f (xt ; θ ) = θ1 +
+θ2 xt + θ3 x2t
+• Ait-Sahalia’s nonlinear mean-reverting model (Ait2
+Sahalia 1996): f (xt ; θ ) = θ1 + θ2 x−1
+t + θ3 xt + θ4 xt
+• Homoskedasticity model: g(xt ; θ ) = θ0
+• Linear
+heteroscedastic model: g(xt ; θ ) = θ0 +
+m
+θ
+x
+i
+t−i
+i=1
+• ARCH(m)
+nonlinear heteroscedastic model: g(xt ; θ )
+
+m
+= θ0 + i=1 θi x2t−i
+• APARCH(m, δ) 
+nonlinear heteroscedastic model:
+δ 1δ
+g(xt ; θ ) = (θ0 + m
+i=1 θi | xt−i | )
+1
+• Gaussian distributed noise: p(η; μ, σ ) = √2π
+exp
+σ
+(− (μ−η)
+)
+2σ 2
+2
+
+( ν+1 )
+
+• Student’s t distributed noise: p(η; ν) = √νπ 2 ( ν )
+ν+1
+
+2
+
+(1 + ην )− 2
+• Generalized error distributed noise: p(η; α, β, μ) =
+β
+exp(−(| η − μ | /α)β )
+2α ( 1 )
+2
+
+β
+
+In models (1)–(2), since λ and θ1 in the f function can
+not be identified simultaneously, I let λ = 0 and denote ψ =
+(γ , θ , σε ) ∈ Ψ as the identifiable parameter of the models (1)–
+(2). ψ is estimated based on the data set {PA,t , PB,t }Tt=1 .
+It is easy to find that the general framework for pairs trading includes linear and Gaussian model as special case for
+the dynamics of the spread, and my approach can be applied
+to all these cases. The new model has three advantages compared with existing models for pairs trading, such as Elliott
+et al. (2005) and Moura et al. (2016). First, because η can
+be non-Gaussian, x can follow a non-Gaussian process. By
+allowing for this non-Gaussianity in η, the model can capture
+the distributional deviation from Gaussianity and reproduce
+heavy-tailed returns.
+Second, the model can capture heteroscedasticity in financial data. A well-known feature of financial time-series is
+volatility clustering: ‘large changes tend to be followed by
+large changes, of either sign, and small changes tend to be
+followed by small changes’ (Mandelbrot 1963). This feature
+was documented later in Ding et al. (1993), and Ding and
+Granger (1996) among others. In model (2), the volatility
+persistence can be represented by an ARCH-style modeling.
+Details about the application of an ARCH model in finance
+can be found in Bollerslev et al. (1992).
+Third, to characterize the nonlinear dependence in financial data, I allow f to be nonlinear. Scheinkman and
+LeBaron (1989) found evidence indicating the presence of
+nonlinear dependence in the weekly returns of the CRSP
+value-weighted index. Ait-Sahalia (1996) found nonlinearity
+in the drift function of interest rate and concluded that ‘the
+principal source of rejection of existing (linear drift) models
+is the strong nonlinearity of the drift.’ I keep the functional
+form of f flexible and as a result, we can capture the nonlinear
+dependence in financial data.
+
+trading rule : the trigger that generates the signal
+
+Pairs trading with general state space models
+3. A new approach to pairs trading
+In this section, I discuss the trading strategies and trading rules
+for pairs trading. In this study, a trading strategy is a method of
+buying and selling of assets in markets based on the estimation
+of the unobservable spread. A trading rule is the predefined
+value that generates the trading signal for a specific trading
+strategy with an investing objective. To implement a strategy
+and rule on pairs trading, we need the following quantities:
+(i) parameter estimates for the models (1)–(2), (ii) an estimate
+of the spread, and (iii) choice of a specific strategy and the
+optimal trading rule. I discuss these aspects in this section.
+More specifically, in Section 3.1, I present an algorithm for
+filtering the unobservable spread and parameter estimation.
+In Section 3.2, I discuss two benchmark trading strategies.
+In Section 3.3, I present and compare three popular trading rules associated with the benchmark trading strategies. In
+Section 3.4, I propose a new trading strategy, where I change
+the way we open or close a trade, and discuss the benefit of
+this new strategy compared with the benchmark strategies.
+Because the existing trading rule can not be simply applied
+to the models (1)–(2), I propose a new approach to calculate
+the optimal trading rule based on a simulation of the spread.
+The details of this simulation-based method are presented in
+Section 3.5. In Section 3.6, I summarize the procedures for
+pairs trading. These procedures can be applied to pairs trading for all the trading strategies and rules discussed in this
+paper.
+
+1569
+
+in the previous period. Compute and store
+
+1   (g)
+(g)
+f xt,s + g xt,s ∗ ak .
+G g=1
+G
+
+ct+1,i =
+
+and
+2
+1    (g)
+f xt,s − ct+1,i
+G g=1
+G
+
+Qt+1,i =
+
+ 
+(g)
++ g xt,s
+
+2
+
+∗ Pk ,
+
+where ak and Pk , k = 1, . . . , m, are from the approx(g)
+imation in Step 1. When t = 0, {x0,s }G
+g=1 is sampled
+from N(μ, Σ).
+• Step 3: Repeat Step 2 for s = 1, 2, . . . , Jt+1 , with
+Jt+1 = mt , and k = 1, . . . m, and store ct+1,i and
+Qt+1,i for i = 1, 2, . . . , It+1 , with It+1 = Jt+1 ∗ m =
+mt+1 .
+• Step 4: Based on the results from Step 3, generate a Box-Muller transformed Halton sequences
+(g)
+{xt+1,i }G
+g=1 from φ(xt+1 − ct+1,i , Qt+1,i ) for i =
+1, 2, . . . , It+1 , with It+1 = mt+1 . Then generate
+(g)
+(g)
+PA,t+1,i = xt+1,i + γ ∗ PB,t+1 . Compute and store
+the following
+1  (g)
+P̄A,t+1,i =
+P
+,
+G g=1 A,t+1,i
+G
+
+3.1. Algorithm for filtering and parameter estimation
+For the specification of models (1)–(2), I run the following
+algorithm of Quasi Monte Carlo Kalman filter (QMCKF) for
+nonlinear and non-Gaussian state space models to estimate the
+unobservable spread and unknown parameters in the models,
+based on the observations {PA,t , PB,t }Tt=1 . This approach treats
+linear and Gaussian model as a special case, and its theoretical properties are studied in Zhang (2020). Suppose the initial
+spread x0 follows N(μ, Σ) for any reasonable choices of μ
+and .
+• Step 1: For non-Gaussian density p(ηt ), we
+use Gaussian mixture density to approximate its
+pdf and denote the 
+approximation as p̃(ηt ) =
+
+m
+m
+α
+φ(η
+−
+a
+,
+P
+),
+i
+t
+i
+i
+i=1
+i=1 αi = 1 associated with
+m
+parameters {αi , ai , Pi }i=1 , and Gaussian density φ†.
+If ηt is Gaussian, then this step can be dropped.
+• Step 2: Generate a Box-Muller transformed Hal(g)
+ton sequence {xt,s }G
+g=1 with sequence size G from
+φ(xt − bt,s , Pt,s ), where bt,s and Pt,s are from Step 5
+
+2
+1   (g)
+PA,t+1,i − P̄A,t+1,i + σε2 ,
+G g=1
+G
+
+Vt+1,i =
+
+1   (g)
+− ct+1,i
+x
+G g=1 t+1,i
+
+(g)
+× PA,t+1,i − P̄A,t+1,i .
+G
+
+St+1,i =
+
+• Step 5: Compute Kt+1,i = St+1,i V−1
+t+1,i , Pt+1,i =
+2
+Qt+1,i − Kt+1,i Vt+1,i , and bt+1,i = ct+1,i + Kt+1,i
+(PA,t+1 − P̄A,t+1,i ) where Qt+1,i and ct+1,i are from
+Step 3.
+• Step 6: Repeat Steps 4-5 for i = 1, 2, . . . , It+1 ,
+with It+1 = mt+1
+I.t+1Compute and store x̄t+1 and P̄t+1
+where x̄t+1 = i=1
+βt+1,i bt+1,i , and
+P̄t+1 =
+
+It+1
+
+
+βt+1,i Pt+1,i + b2t+1,i
+
+i=1
+
+† To get this approximation, we determine the values of {αi , ai , Pi }m
+i=1
+by minimizing the relative entropy between the true density p(ηt ) and
+its approximation p̃(ηt ). The relative entropy is defined by
+H (p|p̃) =
+
+
+ 
+p (η)
+× p (η) dη.
+log
+p̃ (η)
+
+The above relative entropy can be computed in a numerical manner
+if it does not admit a closed-form solution.
+
+−
+
+It+1
+
+
+2
+
+βt+1,i bt+1,i
+
+,
+
+i=1
+
+φ PA,t+1 − ct+1,i − γ ∗ PB,t+1 , Vt+1,i
+.
+βt+1i = It+1
+i=1 φ PA,t+1 −ct+1,i −γ ∗ PB,t+1 , Vt+1,i
+• Step 7: Repeat Steps 2-6 for t = 0, 1, 2, . . . , T.
+
+1570
+
+G. Zhang
+
+The output {x̄t }Tt=1 from Step 6 is our estimation of the
+spread. To estimate the unknown parameter in the model, we
+first write the log-likelihood function as
+LG
+T (ψ) ≡
+
+T
+
+
+log f G ψ; PA,t , PB,t
+
+t=1
+
+=
+
+T−1
+
+t=0
+
+log
+
+ It+1
+
+i
+
+1
+
+2πVt+1,i
+
+PA,t+1 − P̄A,t+1,i
+× exp −
+2 ∗ Vt+1,i
+
+2
+
+the spread is higher than or equal to the mean. The return from
+this trade is C − L.
+In Strategy B (illustrated in Figure 2), we open a trade when
+the spread crosses the upper boundary from below (e.g. at t1 )
+or crosses the lower boundary from above (e.g. at t2 ). Unlike
+the Strategy A, we will hold the portfolio until we need to
+switch the position. Thus, in Strategy B, we clear the exposure
+at the same time when we open a new trade ( i.e. t2 and t1
+coincide).
+
+
+
+and the MLE, ψ̂MLE , of the unknow parameter will be determined to maximize the above likelihood. That is,
+ψ̂MLE = argmax LG
+T (ψ) .
+ψ∈Ψ
+
+A straightforward grid search can be used to find ψ̂MLE when
+the number of the unknown parameters is small. Otherwise,
+several optimization algorithms can be applied to find ψ̂MLE .
+See Hajivassiliou and McFadden (1998) and Cameron and
+Trivedi (2005) for details.
+Also, a dual state-parameter estimation approach can be
+used to estimate the parameters. In this approach, we consider
+the unknown parameters as state variables and obtain the filtering estimation of the original state variables and unknown
+parameters simultaneously. See Wan et al. (1999) and Wan
+and Nelson (2000) for examples.
+3.2. Benchmark trading strategies
+As I discussed in Section 1, the basic idea for pairs trading
+is to open a trade (short one asset and long the other one)
+when the spread deviates from the equilibrium, and to close
+the trade when the spread returns to the equilibrium. The trading strategies for pairs trading are constructed based on this
+idea. I use Figures 1 and 2 to illustrate two benchmark trading
+strategies (hereinafter, Strategies A and B). In Figures 1 and
+2, the same estimated spread is plotted as solid lines, while a
+preset upper boundary U and a preset lower boundary L are
+plotted as dashed lines. I discuss how to choose the optimal
+U and L in Section 3.3. The upper and lower boundaries act
+as thresholds to determine whether the spread has deviated
+enough from the long-term equilibrium, and we use these two
+criteria to open a trade. In addition, a preset value C acts as
+a threshold to determine whether the spread has returned to
+the long-term equilibrium, and we use this criterion to close
+a trade. In this study, I take C as the mean of the spread, and
+plot it as a solid green line in both Figures 1 and 2.
+In Strategy A (illustrated in Figure 1), a trade is opened at t1
+when the spread is higher than or equal to U. In this case, we
+sell 1 share of stock A and buy γ shares of stock B. When the
+spread is less than or equal to the mean (i.e.C), we close the
+trade and clear the position. The return from this trade is thus
+U − C. At t2 , when the spread is less than or equal to L, we
+open a trade, buying 1 share of stock A and selling γ shares of
+stock B. We close this trade and clear the position at t2 , when
+
+3.3. Conventional trading rules
+When implementing pairs trading, the trading rule for a specific trading strategy is the computation of optimal thresholds,
+U and L, for fulfilling an investing objective based on that
+strategy. There are three popular approaches for computing
+the optimal thresholds, when the model (2) is linear meanreverting, homoscedastic, and Gaussian (i.e. f is linear, g is
+a constant, and η is a Gaussian noise). The optimal trading rule for a general specification of model (2) is given in
+Section 3.5.
+• Rule I: Ad hoc boundaries
+Rule I takes U to be one (1-σ rule) or two (2-σ rule) standard deviations above the mean, L to be one or two standard
+deviations below the mean, and C is the mean of the spread.
+This rule is simple and popular in practice. In particular, the
+2-σ rule was first applied by Gatev et al. (2006) and later
+checked by Moura et al. (2016), Zeng and Lee (2014), and
+Cummins and Bucca (2012). The 1-σ rule was discussed in
+Zeng and Lee (2014), and the performance of the 1-σ rule
+and 2-σ rule was compared in the same paper.
+• Rule II : Boundaries based on the first-passage-time
+This rule was first adopted by Elliott et al. (2005) and later
+by Moura et al. (2016). Suppose xt , the spread, follows a
+standardized Ornstein–Uhlenbeck process:
+dxt = −xt dt +
+
+√
+
+2 dWt
+
+Let T0,x0 be the first passage time of xt , and we know T0,x0 has
+a pdf known explicitly:
+
+f0,x0 (t) =
+
+x20 e−2t
+2
+|x0 |e−t
+exp
+−
+π 1 − e−2t 3/2
+2 1 − e−2t
+
+Here, given the value of current spread, t∗ , the optimizer of
+the above pdf, is the likeliest time that the spread will revert
+to the mean. In model (2), if the spread follows the Ornstein–
+Uhlenbeck process, then we can first standardize x, and use t∗
+to construct the optimal C. A similar idea can be applied to
+compute U and L.
+• Rule III: Boundaries based on the renewal theorem
+This rule was first proposed by Bertram (2010), and then
+extended by Zeng and Lee (2014). Under this rule, each
+trading cycle is separated into two parts, τ1 and τ2 , defined
+
+Pairs trading with general state space models
+
+1571
+
+Figure 1. Trading Strategy A.
+
+Figure 2. Trading Strategy B.
+
+by
+
+renewal theorem, the return per unit time is given by:
+
+τ1 = inf {t; xt = C|x0 = U} ,
+
+and
+
+τ2 = inf {t; xt = U|x0 = C} ,
+
+where x is the spread. Suppose T is the time taken to complete
+each trade cycle, i.e. T = τ1 + τ2 , and Nτ is the number of
+transactions we can have in the period [0, τ ]. Then, by the
+
+E (Nτ )
+U −C
+U −C
+=
+=
+.
+τ →∞
+τ
+E (T)
+E (τ1 ) + E (τ2 )
+
+(U − C) lim
+
+where E(τ1 ) and E(τ2 ) can be computed based on the density
+of the first passage time, as mentioned in Rule II.
+The problem of this rule, as Zeng and Lee (2014) have
+pointed out, is that when there is no transaction cost, this strategy implies that U (and L) will be arbitrarily close to C. This
+suggests that the trader values the trading frequency more than
+
+1572
+
+G. Zhang
+
+Figure 3. Trading Strategy C. (a) Trading Strategy C in Homoscedastic Model. (b) Trading Strategy C in Heteroscedastic Model.
+
+the profit per trade. Consequently, this could increase the risk
+of the portfolio significantly.
+3.4. The new trading strategy
+I summarize the new trading strategy (hereinafter, Strategy C)
+in Figure 3. The basic idea of Strategy C is similar to both
+Strategies A and B: opening a trade when the spread is far
+
+away from the equilibrium and closing the trade when the
+spread returns to the equilibrium. Unlike Strategies A and
+B, in Strategy C, we open a trade when the spread crosses
+the upper boundary from above (or crosses the lower boundary from below), and we clear the position when the spread
+crosses the mean, or crosses the boundaries (U and L) after
+a trade has been opened (i.e. the spread crosses the upper
+boundary from below or the lower boundary from above). For
+
+Pairs trading with general state space models
+example, in Figure 3(a) for a homoscedastic model, at t1 , t2 ,
+t3 , and t4 , we open a trade; and at t1 , t2 , t3 , and t4 , we clear the
+exposure. In Figure 3(b) for a heteroscedastic model, we open
+a trade at t1 and t2 , and we close the trade at t1 , and t2 .
+Now I discuss the properties of this trading strategy when
+the model (2) is homoscedastic (i.e. the g function is constant)
+and when it is heteroscedastic (i.e. g is non-constant). In the
+first situation, the main benefit of Strategy C is that we can
+avoid holding the portfolio when the spread is larger than the
+upper boundary (or smaller than the lower boundary). This
+would significantly decrease the portfolio risk and drawdown.
+The main drawback of Strategy C is that the return can be
+lower because we open a trade when the spread is closer to
+the mean of the spread than in the case of Strategy A. Therefore, there is a trade-off between the risk and the return. When
+model (2) is heteroscedastic, this strategy can not only reduce
+the risk but also improve the return because opening a trade
+now depends on the level of volatility, and consequently, the
+boundaries are no longer constant over time. The logic of this
+new strategy is illustrated in Figure 3(a,b), for homoscedastic
+and heteroscedastic cases, respectively.
+3.5. Simulation based method for optimal trading rule
+For a general specification of models (1)–(2), the conventional
+trading rules in Section 3.3 are difficult to apply. For example,
+the 1-σ or 2-σ rules can not be applied when model (2) is
+heteroscedastic. For a complicated specification of model (2),
+it is impossible to derive the density of the first passage time
+explicitly; thus, rules II and III are unavailable in this case.
+To compute the optimal trading rule under model (2) for
+all of the trading strategies, I propose to select the optimal
+boundaries (i.e. for U and L; I set C as the mean of the
+spread by default† ) based on the Monte Carlo simulation of
+the spread (Equation (2) given the estimation of the unknown
+parameters). Different criteria or investing objectives, such as
+expected return, Sharpe ratio or Calmar ratio, can be used to
+determine the optimal boundaries for a given trading strategy.
+Now, I use the following five specifications of model (2)
+to describe the details of the computation of the new trading
+rules:
+• Model 1: xt+1 = 0.9590 ∗ xt + 0.0049 ∗ ηt , ηt ∼
+N(0, 1)
+• Model 2: xt+1 = 0.9 ∗ xt + 0.2590 ∗ x2t + 0.0049 ∗
+ηt , ηt ∼ N(0, 1)
+• 
+Model 3: xt+1 = 0.9590 ∗ xt +
+(0.00089 + 0.08 ∗ x2t ) ∗ ηt , ηt ∼ N(0, 1)
+√
+∗ ηt , ηt ∼ t• Model 4: xt+1 = 0.9590 ∗ xt + 0.0049
+3
+distribution with 3 degrees of freedom
+√
+∗
+• Model 5: xt+1 = 0.9 ∗ xt + 0.2590 ∗ x2t + 0.0049
+3
+ηt , ηt ∼ t-distribution with 3 degrees of freedom
+† I assume C as the mean of the spread for simplicity, and this
+assumption can be relaxed to construct more flexible strategies. For
+example, we can define C ≡ (mean ± ) for a parameter  and
+we close the trade when the spread enters into this region. My
+simulation-based method can also be applied to compute the optimal . See an example of this strategy in Tie et al. (2018). A
+more detailed discussion of this strategy is provided in the online
+appendix.
+
+1573
+
+Model 1 is a linear, Gaussian, and homoscedastic model.
+This is the most popular model used for pairs trading. See
+Elliott et al. (2005) and Moura et al. (2016) for examples of
+this model. Model 2 is a nonlinear mean-reverting and Gaussian model; Model 3 is a linear mean-reverting, Gaussian, and
+nonlinear heteroscedastic model; Model 4 is a linear meanreverting and non-Gaussian model; and Model 5 is a nonlinear
+mean-reverting and non-Gaussian model. The last four models are different extensions of Model 1 and have never been
+discussed in the literature on pairs trading. These five models
+can be considered as the benchmark models for pairs trading. Further extensions are available based on the combination
+of these models, and our simulation-based method for the
+optimal trading rule can also be applied to them.
+For every specification of Models 1–5, I calculate the optimal trading rules through the N simulations of the spread for
+Strategies A, B and C and compare the resulting performances
+of the three strategies based on the expected return and Sharpe
+ratio. More specifically, across all of the examples, I represent
+the optimal trading rule (upper boundary U and lower boundary L) as the ratio of its difference with the mean of the spread
+to one standard deviation of the spread, and I consider the
+upper boundary U between [0.1, 2.5] and lower boundary L
+between [−2.5, −0.1] for a grid size of 0.1. For every specification of Models 1-5 and every realization of the process of
+}Tt=1 , where m is for different models (m = 1,
+the spread {x(m,n)
+t
+2, 3, 4, 5), and n is for different realizations of the spread
+in the simulation (n = 1, . . . N), I choose Ui from [0.1, 2.5]
+and Lj from [−2.5, −0.1], where i, j = 1, . . . , 25, and compute
+the resulting cumulative return and Sharpe ratio for difference
+strategies. More specifically, I denote the cumulative return
+m,k,n
+m,k,n
+and, SRi,j
+, respectively, where
+and Sharpe ratio as CRi,j
+k is for difference strategies (k = 1, 2, 3). For model m and
+strategy k, the resulting expected cumulative return CRm,k
+i,j and
+m,k
+Sharpe ratio SRi,j are computed as
+1  m,k,n
+CRi,j ,
+N n=1
+N
+
+CRm,k
+i,j =
+
+1  m,k,n
+SR
+.
+N n=1 i,j
+N
+
+and
+
+SRm,k
+i,j =
+
+∗
+Then, the optimal trading rule (Um,k
+, L∗m,k ) is selected to
+m,k
+maximize CRm,k
+i,j or SRi,j , that is,
+ ∗
+
+m,k
+Um,k , L∗m,k = arg max zi,j
+Ui ,Lj
+
+where z = CR or SR. Across all of the examples, I set the total
+trading period to be 1000 trading days (or approximately four
+years), and I set the simulation size to be N = 10, 000. For
+simplicity, I assume that the transaction cost is 20 bp (0.2%)‡
+, and the annualized risk-free rate is set at 0.
+In Table 1, I report the optimal trading rule for every combination of the five models and three strategies, and the resulting
+expected cumulative return and Sharpe ratio§. As we can
+find from this table, when the model is heteroscedastic, Strategy C outperforms the other two strategies in terms of both
+‡ This transaction cost is on one asset of the pair. Since a complete
+trading includes transactions on two assets, the total transaction cost
+of one complete trading is 40 bp.
+§ If the spread and the strategy are symmetric around the mean,
+then the optimal upper boundary and lower boundary should also be
+
+1574
+
+G. Zhang
+Table 1. Optimal Selection of Trading Rule for Cumulative Return and Sharpe Ratio.
+Model
+
+Strategy
+
+U∗
+
+L∗
+
+CR
+
+U∗
+
+L∗
+
+SR
+
+Model 1
+
+A
+B
+C
+A
+B
+C
+A
+B
+C
+A
+B
+C
+A
+B
+C
+
+0.7
+0.5
+1
+0.8
+0.6
+1.2
+0.3
+0.1
+0.8
+0.6
+0.4
+1
+0.7
+0.5
+1.2
+
+− 0.7
+− 0.5
+−1
+− 0.8
+− 0.6
+− 1.3
+− 0.2
+− 0.1
+− 0.8
+− 0.6
+− 0.5
+−1
+− 0.7
+− 0.5
+− 1.2
+
+0.3868
+0.4245
+0.2990
+0.5562
+0.6085
+0.3300
+3.9413
+4.0139
+6.6763
+0.3792
+0.4071
+0.2243
+0.5359
+0.5760
+0.2423
+
+1.1
+0.5
+0.9
+1.2
+0.6
+1.2
+0.4
+0.1
+0.1
+1
+0.5
+1
+1.2
+0.5
+1.4
+
+− 1.1
+− 0.5
+− 0.9
+− 1.3
+− 0.6
+− 1.3
+− 0.4
+− 0.1
+− 0.1
+−1
+− 0.5
+−1
+− 1.2
+− 0.5
+− 1.4
+
+0.0882
+0.0807
+0.1044
+0.1308
+0.1203
+0.1163
+0.0751
+0.0743
+0.2499
+0.0881
+0.0782
+0.0829
+0.1293
+0.1145
+0.0961
+
+Model 2
+Model 3
+Model 4
+Model 5
+
+Note: The third and forth columns are the optimal boundaries based on maximizing the cumulative return, and the fifth column
+is the resulting cumulative return. The sixth and seventh columns are the optimal boundaries based on maximizing the Sharpe
+ratio, and the eighth column is the resulting Sharpe ratio. The cumulative return is displayed in decimal.
+
+the cumulative return and the Sharpe ratio. Moreover, for
+the other homoscedastic models (Models 1, 2, 4, and 5), the
+Sharpe ratio of Strategy C is competitive, although the cumulative return is not. This supports our discussion of this new
+strategy in Section 3.4.
+I leave the detailed results of the simulation method in the
+appendix. More precisely, the expected cumulative returns
+and Sharpe ratio as functions of various choices of U and L
+are given in Figures A1–A5 for every possible combination of
+the three strategies and four models.
+
+3.6. Summary
+Now I summarize the procedures for pairs trading based on
+models (1)–(2) and conclude this section.
+• Step 1: Choose a specific model for (1)–(2). Given
+this model and observations {PA,t , PB,t }Tt=1 , we run
+the Quasi Monte Carlo Kalman filter and obtain the
+filtered estimation of the spread {x̄t }Tt=1 and the estimation of the unknown parameters in the model.
+The details of running QMCKF are discussed in
+Section 3.1.
+• Step 2: Choose a trading strategy, and determine the
+optimal trading rule (i.e. the optimal U and L) for a
+specific criterion using the Monte Carlo simulation
+based on the data until time T. The details of this
+step can be found in Sections 3.2–3.5.
+• Step 3: For t > T, we run QMCKF and estimate
+x̄t with ψ = ψ̂, the estimate of the parameters
+obtained in Step 1. We use this {x̄t }t>T and follow
+the preset trading strategy and optimal trading rule
+from Step 2 to generate the signal for trading.
+
+symmetric around zero, i.e, U ∗ = −L∗ . However, due to the approximation error in gridding, the absolute values of U ∗ and L∗ may not
+be exactly the same in Table 1.
+
+Table 2. Parameter Estimation of Model I and Model II on PEP vs.
+KO and EWT vs. EWH.
+
+γ
+σε2
+θ0
+θ1
+θ2
+θ3
+
+Panel A: PEP vs. KO
+
+Panel B: EWT vs. EWH
+
+Model I
+
+Model II
+
+Model I
+
+Model II
+
+1.98
+0.012
+− 0.0001
+0.9572
+0.029
+–
+
+2.03
+0.011
+− 0.001
+0.9330
+0.0003
+0.1283
+
+1.40
+0.0007
+− 0.0004
+0.9898
+0.0337
+–
+
+1.42
+0.0006
+− 0.0015
+0.9589
+0.0016
+0.1136
+
+4. Applications
+In this section, I test the performance of pairs trading through
+general state space modeling for different trading strategies.
+Across all of the applications in this section, I assume that the
+transaction cost is 20 bp and the annualized risk-free rate is
+2%, and I test the performance of Strategies A, B, and C for
+two specifications of model (2):
+• Model I: xt+1 = θ0 + θ1 xt + θ
+2 ∗ ηt , ηt ∼ N(0, 1)
+• Model II: xt+1 = θ0 + θ1 xt + θ2 + θ3 x2t ∗ ηt , ηt ∼
+N(0, 1)
+As I explained in Section 3.4, the new trading strategy
+(Strategy C) can significantly improve the performance of
+pairs trading when the model (2) is heteroscedastic. See
+Model 3 of Table 1 for a comparison based on simulation. In
+the following, I use actual data to compare the performance
+of various strategies and show the improvement of the heteroscedastic modeling combined with the proposed strategy.
+4.1. Pepsi vs. Coca
+In this example, I examine the performance of pairs trading
+for PEP (Pepsi) and KO (Coca). The data consist of daily
+observations of adjusted closing prices of PEP and KO from
+01/03/2012 to 06/28/2019. Panel A of Table 2 reports the
+parameter estimation of both Models I and II for this pair. The
+
+Pairs trading with general state space models
+
+1575
+
+Table 3. Annualized Performance of Pairs Trading on PEP vs. KO and EWT vs. EWH.
+Strategy and Model
+
+Return
+
+Std Dev
+
+Sharpe
+
+Calmar
+
+Pain index
+
+Panel A: PEP vs. KO
+Strategy A, Model I
+Strategy B, Model I
+Strategy C, Model I
+Strategy A, Model II
+Strategy B, Model II
+Strategy C, Model II
+
+0.1311
+0.1385
+0.0618
+0.1340
+0.1407
+0.2186
+
+0.0988
+0.1153
+0.0534
+0.1038
+0.1139
+0.0659
+
+1.1003
+1.0052
+0.7649
+1.0751
+1.0366
+2.9518
+
+1.3742
+1.2204
+0.8243
+1.4040
+1.2398
+8.2384
+
+0.0195
+0.0334
+0.0087
+0.0200
+0.0258
+0.0030
+
+Panel B: EWT vs. EWH
+Strategy A, Model I
+Strategy B, Model I
+Strategy C, Model I
+Strategy A, Model II
+Strategy B, Model II
+Strategy C, Model II
+
+0.1480
+0.1109
+0.1294
+0.1402
+0.1093
+0.3184
+
+0.1111
+0.1362
+0.0740
+0.1223
+0.1349
+0.0752
+
+1.1277
+0.6531
+1.4458
+0.9622
+0.6473
+3.8892
+
+1.3042
+0.7836
+3.0926
+1.2354
+0.7717
+10.3005
+
+0.0156
+0.0328
+0.0080
+0.0196
+0.0306
+0.0032
+
+annualized performance metrics are provided in Panel A of
+Table 3. It is clear that in Model II, the annualized return of
+Strategy C is almost 50% higher than those of Strategies A and
+B, while Strategy C maintains almost half of the risk (measured by annualized standard deviation) of Strategy A or B.
+By comparing these matrices, we find that this improvement
+is significant. However, the difference in the performances of
+Strategies A and B across the two models is limited. This
+implies that the effect of heteroscedasticity modeling on the
+performances of Strategies A and B is not significant. This is
+because in Strategies A and B, the hedging portfolio is held
+until the spread is around the mean; therefore, the frequency
+of changing positions is lower in Strategies A or B than that
+in Strategy C.
+
+4.2. EWT vs. EWH
+In this example, I examine the performance of pairs trading
+for EWT and EWH. The data consist of daily adjusted closing prices of EWT and EWH from 01/01/2012 to 05/01/2019.
+EWT is the iShares MSCI Taiwan ETF managed by BlackRock. It seeks to track the investment results of an index
+composed of Taiwanese equities, while EWH similarly corresponds to Hong Kong equities. Following the example of
+PEP vs. KO, I test the performance of Strategies A, B, and C
+for Models I and II. I report the parameter estimation in Panel
+B of Table 2, and the annualized performance in Panel B of
+Table 3. Comparing the annualized performance, we find that
+the heteroscedasticity modeling can improve the performance
+of Strategy C significantly, while it has no effect on Strategy
+A or B.
+4.3. Pairs trading on U.S. Banks listed on the NYSE
+I use this example to illustrate the improvement of our new
+modeling and strategy by implementing pairs trading on U.S.
+banks listed on the NYSE from 01/01/2013 to 01/10/2019.
+To avoid data snooping and make our results more concrete, I
+use a simple method in choosing assets and constructing pairs.
+Specifically, based on market capacity, I select the five largest
+banks to construct a group of large banks and the five smallest banks to construct a group of small banks. The large bank
+
+group includes JPM, BAC, WFC, C, and USB† , and the small
+bank group includes CPF, BANC, CUBI, NBHC, and FCF‡ .
+I compare the performance of Model I combined with Strategy A against Model II combined with Strategy C. Model I
+combined with Strategy A is a popular approach in the existing literature on pairs trading, making it a good benchmark
+for comparison.
+In Panel A of Table A1, I report the performance of these
+two approaches on 10 pairs of the large banks. The performance on 10 pairs among the small banks is given in Panel
+B of Table A1. It is apparent that Model II combined with
+Strategy C outperforms Model I combined with Strategy A
+for almost all the pairs, either in terms of annualized returns
+or annualized Sharpe ratios. The improvement in the Sharpe
+ratio of Model II combined with Strategy C is much more
+significant than that in returns. For example, when trading is
+implemented on pairs among large banks, the improvement in
+return is 41.29%, and the improvement in the Sharpe ratio is
+89.23%. If trading is implemented on pairs of small banks, the
+improvement in returns is 74.41%, and that in the Sharpe ratio
+is 151.8%.
+In addition, by comparing the results in both panels of
+Table A1, we find that the performance of pairs of small banks
+is better than that of large banks, either for Model I combined with Strategy A or Model II combined with Strategy
+C is applied for trading. For example, applying Model I combined with Strategy A, the mean of the returns of all pairs of
+large banks is 0.0703, and that of small banks can be improved
+to 0.1524. Moreover if Model II combined with Strategy C is
+applied, we can get an improvement of 0.1664 (from 0.0994
+to 0.2658) by switching from trading on large banks to trading
+on small banks. In Table A2, I report the performance of the
+two approaches of pairs trading for all possible pairs between
+large banks and small banks, that is, I pair one large bank
+with one small bank. For some pairs, such as JPM-CUBI and
+
+† JPM is for J P Morgan Chase & Co; BAC is for Bank of America
+Corporation; WFC is for Wells Fargo & Company; C is for Citigroup
+Inc.; USB is for U.S. Bancorp.
+‡ CPF is for CPB Inc.; BANC is for Banc of California, Inc.; CUBI is
+for Customers Bancorp, Inc.; NBHC is for National Bank Holdings
+Corporation; FCF is for First Commonwealth Financial Corporation.
+
+1576
+
+G. Zhang
+
+BAC-CUBI, the spread is far from being mean-reverting, thus
+resulting in poor pairs trading performance.
+To further investigate the performance of pairs trading, I
+check the out-of-sample performance of the two approaches
+on the 10 bank stocks. More precisely, I separate 01/10/2012
+to 01/12/2019 into two periods: 01/10/2012 to 01/01/2018 (insample period) and 01/01/2018 to 01/12/2019 (out-of-sample
+period). I use the in-sample data to train the model, estimate
+the parameter of the model, and determine the optimal trading rules. In the out-of-sample period, I use the parameters
+and optimal trading rules based on in-sample data to generate the trading signal. The results are given in Tables A3–A6.
+From these tables, we can also confirm our earlier findings
+that Model II combined with Strategy C outperforms Model
+I combined with Strategy A in terms of both the returns and
+Sharpe ratio, and the improvement is more significant with
+regard to the Sharpe ratio.
+
+5. Conclusion
+Pairs trading is a statistical arbitrage involving the long/short
+position of overpriced and underpriced assets. The results in
+this study show that digging into the modeling and trading
+strategy can improve the performance of pairs trading significantly and harness the greater potential of pairs trading in the
+financial markets. This finding can help empirical research on
+the general profitability of pairs trading and the discussion of
+tests of market efficiency, which I leave for future research to
+address.
+
+Acknowledgments
+I am grateful to my main advisor Zhongjun Qu for his guidance and suggestions throughout this project. Special thanks
+are due to two anonymous referees, and Jim Gatheral (the editor). Their detailed suggestions have greatly improved this
+article. I also acknowledge helpful comments from Undral
+Byambadalai, Li Chen, Shuowen Chen, Taosong Deng, JeanJacques Forneron, Hiroaki Kaido, Pierre Perron, and Anlong
+Qin. All errors are mine.
+
+Disclosure statement
+No potential conflict of interest was reported by the author(s).
+
+References
+Ait-Sahalia, Y., Testing continuous-time models of the spot interest
+rate. Rev. Financ. Stud., 1996, 9, 385–426.
+
+Bai, Y. and Wu, L., Analytic value function for optimal regimeswitching pairs trading rules. Quant. Finance, 2018, 18(4), 637–
+654.
+Bertram, W.K., Analytic solutions for optimal statistical arbitrage
+trading. Phys. A: Stat. Mech. Appl., 2010, 389(11), 2234–2243.
+Bogomolov, T., Pairs trading based on statistical variability of the
+spread process. Quant. Finance, 2013, 13, 1411–1430.
+Bollerslev, T., Chou, R.Y. and Kroner, K.F., ARCH modeling in
+finance: A review of the theory and empirical evidence. J.
+Econom., 1992, 52, 5–59.
+Cameron, A.C., Trivedi, P.K., Microeconometrics: Methods and
+Applications, May, 2005 (Cambridge University Press: New
+York).
+Clegg, M. and Krauss, C., Pairs trading with partial cointegration.
+Quant. Finance, 2018, 18(1), 121–138.
+Cummins, M. and Bucca, A., Quantitative spread trading on crude
+oil and refined products markets. Quant. Finance, 2012, 12(12),
+1857–1875.
+Ding, Z. and Granger, C.W.J., Modeling volatility persistence of
+speculative returns: A new approach. J. Econom., 1996, 73(1),
+185–215.
+Ding, Z., Granger, C.W.J. and Engle, R.F., A long memory property
+of stock market returns and a new model. J. Empir. Financ., 1993,
+1(1), 83–106.
+Elliott, R.J. and Bradrania, R., Estimating a regime switching pairs
+trading model. Quant. Finance, 2018, 18(5), 877–883.
+Elliott, R.J., Van Der Hoek, J. and Malcolm, W.P., Pairs trading.
+Quant. Finance, 2005, 5, 271–276.
+Gatev, E.G., Goetzmann, W.N. and Rouwenhorst, K.G., Pairs trading:
+Performance of a relative value arbitrage rule. Rev. Financ. Stud.,
+2006, 19, 797–827.
+Hajivassiliou, V.A. and McFadden, D.L., The method of simulated
+scores for the estimation of LDV models. Econometrica, 1998,
+66(4), 863–896.
+Krauss, C., Statistical arbitrage pairs trading strategies: Review and
+outlook. J. Economic Surveys, 2017, 31(2), 513–545.
+Mandelbrot, B.B., The variation of certain speculative prices. J. Bus.,
+1963, XXXVI, 392–417.
+Moura, C.E., Pizzinga, A. and Zubelli, J., A pairs trading strategy
+based on linear state space models and the Kalman filter. Quant.
+Finance, 2016, 16(10), 1559–1573.
+Scheinkman, J.A. and LeBaron, B., Nonlinear dynamics and stock
+returns. J. Bus., 1989, 62(3), 311–337.
+Stübinger, J. and Endres, S., Pairs trading with a mean-reverting
+jump-diffusion model on high-frequency data. Quant. Finance,
+2018, 18(10), 1735–1751.
+Tie, J., Zhang, H. and Zhang, Q., An optimal strategy for pairs trading under geometric brownian motions. J. Optim. Theory Appl.,
+2018, 179, 654–675.
+Tourin, A. and Yan, R., Dynamic pairs trading using the stochastic
+control approach. J. Econ. Dyn. Control, 2013, 37, 1972–1981.
+Vidyamurthy, G., Pairs Trading: Quantitative Methods and Analysis,
+2004 (J. Wiley: Hoboken, NJ).
+Wan, E.A. and Nelson, A.T., Dual Kalman filtering methods for nonlinear prediction, smoothing, and estimation. Advances in neural
+information processing systems, 2000.
+Wan, E.A., van der Merwe, R. and Nelson, A.T., Dual estimation
+and the unscented transformation. NIPS’99: Proceedings of the
+12th International Conference on Neural Information Processing
+Systems, pp. 666–672, November, 1999.
+Zeng, Z. and Lee, C.G., Pairs trading: Optimal thresholds and
+profitability. Quant. Finance, 2014, 14(11), 1881–1893.
+Zhang, G., Quasi Monte Carlo Kalman filter for nonlinear and nonGaussian state space models. Unpublished manuscript, Department of Economics, Boston Univeristy, 2020.
+
+Pairs trading with general state space models
+
+1577
+
+Appendix
+
+Figure A1. Performance of Strategy A, B and C, based on Model 1. (a) Return of Strategy A, Model 1. (b) Sharpe Ratio of Strategy A,
+Model 1. (c) Return of Strategy B, Model 1. (d) Sharpe Ratio of Strategy B, Model 1. (e) Return of Strategy C, Model 1. (f) Sharpe Ratio of
+Strategy C, Model 1.
+
+1578
+
+G. Zhang
+
+Figure A2. Performance of Strategy A, B and C, based on Model 2. (a) Return of Strategy A, Model 2. (b) Sharpe Ratio of Strategy A,
+Model 2. (c) Return of Strategy B, Model 2. (d) Sharpe Ratio of Strategy B, Model 2. (e) Return of Strategy C, Model 2. (f) Sharpe Ratio of
+Strategy C, Model 2.
+
+Pairs trading with general state space models
+
+1579
+
+Figure A3. Performance of Strategy A, B and C, based on Model 3. (a) Return of Strategy A, Model 3. (b) Sharpe Ratio of Strategy A,
+Model 3. (c) Return of Strategy B, Model 3. (d) Sharpe Ratio of Strategy B, Model 3. (e) Return of Strategy C, Model 3. (f) Sharpe Ratio of
+Strategy C, Model 3.
+
+1580
+
+G. Zhang
+
+Figure A4. Performance of Strategy A, B and C, based on Model 4. (a) Return of Strategy A, Model 4. (b) Sharpe Ratio of Strategy A,
+Model 4. (c) Return of Strategy B, Model 4. (d) Sharpe Ratio of Strategy B, Model 4. (e) Return of Strategy C, Model 4. (f) Sharpe Ratio of
+Strategy C, Model 4.
+
+Pairs trading with general state space models
+
+1581
+
+Figure A5. Performance of Strategy A, B and C, based on Model 5. (a) Return of Strategy A, Model 5. (b) Sharpe Ratio of Strategy A,
+Model 5. (c) Return of Strategy B, Model 5. (d) Sharpe Ratio of Strategy B, Model 5. (e) Return of Strategy C, Model 5. (f) Sharpe Ratio of
+Strategy C, Model 5.
+
+1582
+
+G. Zhang
+Table A1. Performance of Pairs Trading on Pairs of Large Banks and Pairs of Small Banks.
+Model I + Strategy A
+
+Pair
+
+Stock #1
+
+Model II + Strategy C
+
+Improvement (in %)
+
+Stock #2
+
+Return
+
+Sharpe
+
+Return
+
+Sharpe
+
+Return
+
+Sharpe
+
+Panel A: Pairs of Large Banks
+1
+JPM
+BAC
+2
+JPM
+WFC
+3
+JPM
+C
+4
+JPM
+USB
+5
+BAC
+WFC
+6
+BAC
+C
+7
+BAC
+USB
+8
+WFC
+C
+9
+WFC
+USB
+10
+C
+USB
+Mean
+Min
+Max
+Median
+
+0.1185
+0.0229
+0.0567
+0.0412
+0.0451
+0.0874
+0.0554
+0.1031
+0.0591
+0.1140
+0.0703
+0.0229
+0.1185
+0.0579
+
+1.0030
+0.2268
+0.5359
+0.3971
+0.3455
+0.8158
+0.3786
+0.8041
+0.5631
+0.9040
+0.5974
+0.2268
+1.0030
+0.5495
+
+0.0961
+0.0581
+0.1049
+0.0663
+0.0695
+0.1369
+0.0923
+0.1014
+0.0674
+0.2009
+0.0994
+0.0581
+0.2009
+0.0942
+
+1.1126
+0.7434
+1.3486
+0.7832
+0.6046
+1.7516
+1.0077
+0.9731
+0.8934
+2.0862
+1.1304
+0.6046
+2.0862
+0.9904
+
+− 18.90
+153.7
+85.01
+60.92
+54.10
+56.64
+66.61
+− 1.649
+14.04
+76.23
+41.29
+153.7
+69.54
+62.69
+
+10.93
+227.8
+151.7
+97.23
+74.99
+114.7
+166.2
+21.02
+58.66
+130.8
+89.23
+166.6
+108.0
+80.24
+
+Panel B: Pairs of Small Banks
+1
+CPF
+BANC
+2
+CPF
+CUBI
+3
+CPF
+NBHC
+4
+CPF
+FCF
+5
+BANC
+CUBI
+6
+BANC
+NBHC
+7
+BANC
+FCF
+8
+CUBI
+NBHC
+9
+CUBI
+FCF
+10
+NBHC
+FCF
+Mean
+Min
+Max
+Median
+
+0.1832
+0.1092
+0.1436
+0.1162
+0.1583
+0.2105
+0.1669
+0.1575
+0.1362
+0.1425
+0.1524
+0.1092
+0.2105
+0.1506
+
+0.6745
+0.4736
+0.7694
+0.7127
+0.5199
+0.8353
+0.5830
+0.6049
+0.5593
+0.8161
+0.6549
+0.4736
+0.8353
+0.6397
+
+0.2158
+0.2374
+0.1912
+0.2175
+0.4820
+0.1807
+0.3094
+0.2392
+0.2718
+0.3132
+0.2658
+0.1807
+0.4820
+0.2383
+
+1.3428
+1.3563
+1.2573
+1.7210
+1.9742
+1.1435
+2.1898
+1.4485
+1.5292
+2.5273
+1.6490
+1.1435
+2.5273
+1.4889
+
+17.79
+117.4
+33.15
+87.18
+204.5
+− 14.16
+85.38
+51.87
+99.56
+119.8
+74.41
+65.48
+129.0
+58.29
+
+99.08
+186.4
+63.41
+141.5
+279.7
+36.90
+275.6
+139.5
+173.4
+209.7
+151.8
+141.4
+202.6
+132.7
+
+Note: Return is the annualized return, displayed in decimal. Sharpe is the annualized Sharpe ratio.
+
+Pairs trading with general state space models
+
+1583
+
+Table A2. Performance of Pairs Trading on Pairs Between Large Banks and Small Banks.
+Model I + Strategy A
+
+Model II + Strategy C
+
+Improvement (in %)
+
+Pair
+
+Stock #1
+
+Stock #2
+
+Return
+
+Sharpe
+
+Return
+
+Sharpe
+
+Return
+
+Sharpe
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+
+JPM
+JPM
+JPM
+JPM
+JPM
+BAC
+BAC
+BAC
+BAC
+BAC
+WFC
+WFC
+WFC
+WFC
+WFC
+C
+C
+C
+C
+C
+USB
+USB
+USB
+USB
+USB
+Mean
+Min
+Max
+Median
+
+CPF
+BANC
+CUBI
+NBHC
+FCF
+CPF
+BANC
+CUBI
+NBHC
+FCF
+CPF
+BANC
+CUBI
+NBHC
+FCF
+CPF
+BANC
+CUBI
+NBHC
+FCF
+CPF
+BANC
+CUBI
+NBHC
+FCF
+
+0.0670
+0.0587
+− 0.0604
+0.1860
+0.1151
+0.0778
+0.0565
+− 0.0959
+0.1942
+0.1729
+0.0420
+0.1671
+0.0606
+0.1410
+0.1058
+0.1421
+0.0244
+− 0.0031
+0.2164
+0.1520
+0.0782
+0.1435
+− 0.0678
+0.1911
+0.0789
+0.0898
+− 0.0959
+0.2164
+0.0789
+
+0.3965
+0.2396
+− 0.2669
+0.9750
+0.7230
+0.3770
+0.2124
+− 0.3612
+0.9496
+0.9061
+0.2149
+0.6058
+0.2572
+0.7844
+0.5948
+0.7000
+0.0961
+− 0.0138
+1.0536
+0.7687
+0.4494
+0.5450
+− 0.2938
+1.2574
+0.5077
+0.4671
+− 0.3612
+1.2574
+0.5077
+
+0.1833
+0.0935
+0.0423
+0.2683
+0.2594
+0.2486
+0.1383
+0.0473
+0.3420
+0.2541
+0.1138
+0.2071
+0.2053
+0.1237
+0.1366
+0.2214
+0.1999
+0.0617
+0.2927
+0.2246
+0.2408
+0.2361
+0.0700
+0.2384
+0.1206
+0.1828
+0.0423
+0.3420
+0.2053
+
+1.4799
+0.8334
+0.3536
+2.1385
+2.3479
+1.5596
+0.7916
+0.5852
+2.4948
+2.1954
+1.2746
+1.0214
+1.3002
+0.9464
+1.3104
+2.1513
+1.1101
+0.4357
+2.3896
+1.8611
+2.0902
+1.7444
+0.3497
+2.1422
+1.1142
+1.4409
+0.3497
+2.4948
+1.3104
+
+173.6
+59.28
+170.0
+44.25
+125.4
+219.5
+144.8
+149.4
+76.11
+46.96
+171.0
+23.94
+238.8
+− 12.27
+29.11
+55.81
+719.3
+2090
+35.26
+47.76
+207.9
+64.53
+203.2
+24.74
+52.85
+103.6
+144.1
+58.04
+160.2
+
+273.2
+247.8
+232.5
+119.3
+224.7
+313.7
+272.7
+262.0
+162.7
+142.3
+493.1
+68.60
+405.5
+20.65
+120.3
+207.3
+1055
+3257
+126.8
+142.1
+365.1
+220.1
+219.0
+70.37
+119.5
+208.4
+196.8
+98.41
+158.1
+
+Note: Return is the annualized return, displayed in decimal. Sharpe is the annualized Sharpe ratio.
+
+1584
+
+G. Zhang
+Table A3. In Sample and Out of Sample Performance of Pairs Trading on Pairs of Large Banks.
+Model I + Strategy A
+
+Model II + Strategy C
+
+Stock #2
+
+Return
+
+Sharpe
+
+Return
+
+Sharpe
+
+Return
+
+Sharpe
+
+Panel A: In Sample Performance
+1
+JPM
+BAC
+2
+JPM
+WFC
+3
+JPM
+C
+4
+JPM
+USB
+5
+BAC
+WFC
+6
+BAC
+C
+7
+BAC
+USB
+8
+WFC
+C
+9
+WFC
+USB
+10
+C
+USB
+Mean
+Min
+Max
+Median
+
+0.1145
+0.0160
+0.0664
+0.0186
+0.0027
+0.0920
+0.0603
+0.0827
+0.0600
+0.1146
+0.0628
+0.0027
+0.1146
+0.0634
+
+0.8864
+0.1461
+0.5686
+0.2172
+0.0179
+0.7252
+0.3936
+0.5918
+0.6432
+0.8553
+0.5045
+0.0179
+0.8864
+0.5802
+
+0.1501
+0.0795
+0.1013
+0.0629
+0.0568
+0.1193
+0.1535
+0.1219
+0.0739
+0.1695
+0.1089
+0.0568
+0.1695
+0.1103
+
+1.8003
+0.9451
+1.5193
+1.4293
+0.4748
+1.5417
+1.5144
+1.2283
+0.9603
+1.7648
+1.3178
+0.4748
+1.8003
+1.4719
+
+31.09
+396.9
+52.56
+238.2
+2004
+29.67
+154.6
+47.40
+23.17
+47.91
+73.42
+2004
+47.91
+74.11
+
+103.1
+546.9
+167.2
+558.1
+2553
+112.6
+284.8
+107.6
+49.30
+106.3
+161.2
+2553
+103.1
+153.7
+
+Panel B: Out of Sample Performance
+1
+JPM
+BAC
+2
+JPM
+WFC
+3
+JPM
+C
+4
+JPM
+USB
+5
+BAC
+WFC
+6
+BAC
+C
+7
+BAC
+USB
+8
+WFC
+C
+9
+WFC
+USB
+10
+C
+USB
+Mean
+Min
+Max
+Median
+
+− 0.0503
+− 0.0809
+− 0.0841
+0.0867
+0.0364
+− 0.0512
+− 0.0037
+− 0.0586
+− 0.1029
+− 0.0486
+− 0.0357
+− 0.1029
+0.0867
+− 0.0508
+
+− 0.4730
+− 0.5693
+− 0.6845
+0.9267
+0.4593
+− 0.3766
+− 0.0252
+− 0.3472
+− 0.6961
+− 0.2948
+− 0.2081
+− 0.6961
+0.9267
+− 0.3619
+
+− 0.0500
+− 0.0361
+0.0299
+0.1297
+0.0464
+0.0149
+0.0587
+0.0698
+0.0269
+0.0942
+0.0384
+0.0500
+0.1297
+0.0382
+
+− 0.4760
+− 0.3281
+0.3228
+1.6816
+0.4636
+0.2612
+0.5169
+0.7619
+0.3591
+0.7796
+0.4343
+− 0.4760
+1.6816
+0.4114
+
+0.5964
+55.38
+135.6
+49.60
+27.47
+129.1
+1686
+219.1
+126.4
+293.8
+207.6
+51.41
+49.60
+175.2
+
+− 0.6342
+42.37
+147.2
+81.46
+0.9362
+169.4
+2151
+319.5
+151.6
+364.5
+308.7
+31.62
+81.46
+213.7
+
+Pair
+
+Stock #1
+
+Improvement (in %)
+
+Note: The data is from 01/10/2012 to 01/01/2018. Return is the annualized return, displayed in decimal. Sharpe is the annualized Sharpe
+ratio.
+
+Pairs trading with general state space models
+
+1585
+
+Table A4. In Sample and Out of Sample Performance of Pairs Trading on Pairs of Small Banks.
+Model I + Strategy A
+
+Model II + Strategy C
+
+Stock #2
+
+Return
+
+Sharpe
+
+Return
+
+Sharpe
+
+Return
+
+Sharpe
+
+Panel A: In Sample Performance
+1
+CPF
+BANC
+2
+CPF
+CUBI
+3
+CPF
+NBHC
+4
+CPF
+FCF
+5
+BANC
+CUBI
+6
+BANC
+NBHC
+7
+BANC
+FCF
+8
+CUBI
+NBHC
+9
+CUBI
+FCF
+10
+NBHC
+FCF
+Mean
+Min
+Max
+Median
+
+0.2713
+0.1226
+0.1905
+0.1855
+0.2500
+0.2406
+0.2056
+0.1130
+0.1125
+0.1026
+0.1794
+0.1026
+0.2713
+0.1880
+
+0.9758
+0.4404
+0.9823
+1.2385
+0.6928
+0.8926
+0.7819
+0.3808
+0.4133
+0.5723
+0.7371
+0.3808
+1.2385
+0.7374
+
+0.3513
+0.4457
+0.2559
+0.2453
+0.4076
+0.1699
+0.3308
+0.2164
+0.1886
+0.2523
+0.2864
+0.1699
+0.4457
+0.2541
+
+2.0574
+1.9114
+1.7188
+2.5505
+1.9505
+1.4127
+1.8279
+1.8059
+1.1579
+1.8035
+1.8197
+1.1579
+2.5505
+1.8169
+
+29.49
+263.5
+34.33
+32.24
+63.04
+− 29.38
+60.89
+91.50
+67.64
+145.9
+59.64
+65.59
+64.28
+35.16
+
+110.8
+334.0
+74.98
+105.9
+181.5
+58.27
+133.8
+374.2
+180.2
+215.1
+146.9
+204.1
+105.9
+146.4
+
+Panel B: Out of Sample Performance
+1
+CPF
+BANC
+2
+CPF
+CUBI
+3
+CPF
+NBHC
+4
+CPF
+FCF
+5
+BANC
+CUBI
+6
+BANC
+NBHC
+7
+BANC
+FCF
+8
+CUBI
+NBHC
+9
+CUBI
+FCF
+10
+NBHC
+FCF
+Mean
+Min
+Max
+Median
+
+0.1856
+− 0.0924
+− 0.0769
+− 0.0373
+0.1266
+− 0.1577
+0.0107
+− 0.1475
+− 0.1137
+− 0.0578
+− 0.0360
+− 0.1577
+0.1856
+− 0.0674
+
+0.7541
+− 0.3528
+− 0.3944
+− 0.1906
+0.7454
+− 0.6720
+0.0821
+− 0.5514
+− 0.4079
+− 0.3088
+− 0.1296
+− 0.6720
+0.7541
+− 0.3308
+
+0.1649
+0.2424
+0.1621
+0.2094
+0.4109
+− 0.0797
+0.1601
+0
+0
+0.1520
+0.1422
+− 0.0797
+0.4109
+0.1611
+
+0.8297
+1.8467
+1.0216
+1.4249
+2.5902
+− 0.3926
+1.3930
+–
+–
+1.0421
+0.9756
+− 0.3926
+2.5902
+1.0319
+
+− 11.15
+362.3
+310.8
+661.4
+224.6
+49.46
+1396
+100
+100
+363.0
+494.6
+49.46
+121.4
+339.2
+
+10.03
+623.4
+359.0
+847.6
+247.5
+41.58
+1596
+–
+–
+437.4
+852.6
+41.58
+243.5
+411.9
+
+Pair
+
+Stock #1
+
+Improvement (in %)
+
+Note: The data is from 01/10/2012 to 01/01/2018. Return is the annualized return, displayed in decimal. Sharpe is the annualized Sharpe
+ratio.
+
+1586
+
+G. Zhang
+Table A5. In Sample Performance of Pairs Trading on Pairs Between Large Banks and Small Banks.
+Model I + Strategy A
+
+Model II + Strategy C
+
+Improvement (in %)
+
+Pair
+
+Stock #1
+
+Stock #2
+
+Return
+
+Sharpe
+
+Return
+
+Sharpe
+
+Return
+
+Sharpe
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+
+JPM
+JPM
+JPM
+JPM
+JPM
+BAC
+BAC
+BAC
+BAC
+BAC
+WFC
+WFC
+WFC
+WFC
+WFC
+C
+C
+C
+C
+C
+USB
+USB
+USB
+USB
+USB
+
+CPF
+BANC
+CUBI
+NBHC
+FCF
+CPF
+BANC
+CUBI
+NBHC
+FCF
+CPF
+BANC
+CUBI
+NBHC
+FCF
+CPF
+BANC
+CUBI
+NBHC
+FCF
+CPF
+BANC
+CUBI
+NBHC
+FCF
+
+0.1668
+0.2067
+0.0649
+0.1505
+0.2083
+0.1572
+0.2361
+0.0789
+0.2608
+0.1918
+0.0376
+0.2371
+0.0729
+0.0974
+0.0656
+0.0571
+0.2454
+0.0715
+0.1279
+0.1160
+0.0654
+0.2164
+0.0565
+0.1340
+0.0922
+
+0.9415
+0.7134
+0.9832
+0.8387
+1.3273
+0.7484
+0.7452
+0.2755
+1.2323
+1.0401
+0.1924
+0.8323
+0.2682
+0.5548
+0.3971
+0.2873
+0.8899
+0.2696
+0.6511
+0.6154
+0.4915
+0.7529
+0.2443
+0.9289
+0.6221
+
+0.2866
+0.2581
+0.2576
+0.2735
+0.3281
+0.2099
+0.1708
+0.1669
+0.3354
+0.2653
+0.0988
+0.2165
+0.2307
+0.0917
+0.1413
+0.1766
+0.2154
+0.1589
+0.2125
+0.1790
+0.2126
+0.3389
+0.2826
+0.1947
+0.2167
+
+3.0567
+1.5501
+1.6633
+2.2745
+2.9235
+1.7310
+1.0044
+1.4519
+2.5663
+2.3337
+0.6388
+1.0599
+1.9597
+0.6167
+1.1406
+1.4015
+1.9512
+1.0954
+1.5321
+1.3736
+1.9990
+1.9118
+1.9450
+1.5321
+2.1579
+
+71.82
+24.87
+296.9
+81.73
+57.51
+33.52
+− 27.66
+111.5
+28.60
+38.32
+162.8
+− 8.690
+216.5
+− 5.850
+115.4
+206.3
+− 12.22
+122.2
+66.15
+54.31
+225.1
+56.61
+400.2
+45.30
+135.0
+
+224.7
+117.3
+69.17
+171.2
+120.3
+131.3
+34.78
+427.0
+108.3
+124.4
+232.0
+27.53
+630.7
+11.16
+187.2
+387.8
+119.3
+306.3
+135.3
+123.2
+306.7
+153.9
+696.2
+64.94
+246.9
+
+0.1366
+0.0376
+0.2608
+0.1279
+
+0.6737
+0.1924
+1.3273
+0.7134
+
+0.2208
+0.0917
+0.3389
+0.2154
+
+1.7148
+0.6167
+3.0567
+1.6633
+
+61.61
+143.9
+29.95
+68.41
+
+154.5
+220.5
+130.3
+133.2
+
+Mean
+Min
+Max
+Median
+
+Note: The data is from 01/10/2012 to 01/01/2018. Return is the annualized return, displayed in decimal. Sharpe is the annualized Sharpe
+ratio.
+
+Pairs trading with general state space models
+
+1587
+
+Table A6. Out of Sample Performance of Pairs Trading on Pairs Between Large Banks and Small Banks.
+Model I + Strategy A
+
+Model II + Strategy C
+
+Improvement (in %)
+
+Pair
+
+Stock #1
+
+Stock #2
+
+Return
+
+Sharpe
+
+Return
+
+Sharpe
+
+Return
+
+Sharpe
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+
+JPM
+JPM
+JPM
+JPM
+JPM
+BAC
+BAC
+BAC
+BAC
+BAC
+WFC
+WFC
+WFC
+WFC
+WFC
+C
+C
+C
+C
+C
+USB
+USB
+USB
+USB
+USB
+
+CPF
+BANC
+CUBI
+NBHC
+FCF
+CPF
+BANC
+CUBI
+NBHC
+FCF
+CPF
+BANC
+CUBI
+NBHC
+FCF
+CPF
+BANC
+CUBI
+NBHC
+FCF
+CPF
+BANC
+CUBI
+NBHC
+FCF
+
+0.1514
+0.2190
+0.0965
+0.0303
+0.0878
+0.0379
+0.1763
+0.0926
+− 0.0212
+0.0196
+− 0.0625
+0.0583
+− 0.0181
+− 0.1181
+− 0.0821
+− 0.0072
+0.1238
+0.0459
+− 0.0648
+− 0.0265
+0.2108
+0.1951
+0.1516
+− 0.0242
+0.0037
+
+0.8997
+0.9752
+1.1227
+0.1492
+0.4209
+0.1702
+0.6913
+0.3435
+− 0.0999
+0.0899
+− 0.2981
+0.2249
+− 0.0652
+− 0.5631
+− 0.3725
+− 0.0314
+0.4691
+0.1692
+− 0.2911
+− 0.1143
+2.2429
+0.8939
+0.7685
+− 0.1258
+0.0192
+
+0.2731
+0.2023
+0.1610
+0.1799
+0.1682
+0.1592
+0.1693
+0.1014
+0.0144
+0.1117
+− 0.0061
+0.1282
+0.2826
+0.0447
+0.1225
+0.1433
+0.0839
+0.2568
+0.2108
+0.2174
+0.2652
+0.1909
+0.2356
+0.1514
+0.1979
+
+2.3058
+1.1630
+1.0135
+1.8165
+1.0338
+1.3579
+0.8830
+0.4298
+0.7148
+0.8152
+0.6388
+0.6058
+1.5870
+0.2594
+0.8413
+1.1894
+0.6480
+1.2778
+2.1138
+1.2651
+2.4946
+1.3332
+1.5712
+0.9637
+1.2151
+
+80.38
+− 7.626
+66.84
+493.7
+91.57
+320.1
+− 3.971
+9.503
+167.9
+469.9
+90.24
+119.9
+1661
+137.8
+249.2
+2090
+− 32.23
+459.5
+425.3
+920.4
+25.81
+− 2.153
+55.41
+725.6
+5249
+
+156.3
+19.26
+− 9.727
+1117
+145.6
+697.8
+27.73
+25.12
+815.5
+8.6.8
+314.3
+169.4
+2534
+146.1
+325.9
+3888
+38.13
+655.2
+826.1
+1207
+11.22
+49.14
+104.5
+866.1
+6229
+
+0.0510
+− 0.1181
+0.2190
+0.0379
+
+0.3076
+− 0.5631
+2.2429
+0.1692
+
+0.1626
+− 0.0061
+0.2826
+0.1682
+
+1.1815
+0.2594
+2.4946
+1.1630
+
+218.6
+94.84
+29.04
+343.8
+
+284.2
+146.4
+11.22
+587.4
+
+Mean
+Min
+Max
+Median
+
+Note: The data is from 01/01/2018 to 01/12/2019. Return is the annualized return, displayed in decimal. Sharpe is the annualized Sharpe
+ratio.
+
+Copyright of Quantitative Finance is the property of Routledge and its content may not be
+copied or emailed to multiple sites or posted to a listserv without the copyright holder's
+express written permission. However, users may print, download, or email articles for
+individual use.
+
+
