@@ -6,7 +6,7 @@ Three benchmark strategies:
 - Strategy B: Enter on boundary crossing, exit on opposite crossing  
 - Strategy C: Enter on re-entry, exit at mean or stop-loss
 """
-
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 from typing import Union, Literal, List, Dict
@@ -256,83 +256,109 @@ def strategy_C_signals_timevarying(
     C: float,
 ) -> pd.Series:
     """
-    Strategy C with time-varying boundaries for heteroscedastic models.
-    
-    As described in Zhang (2021) Figure 3(b), in the heteroscedastic model,
-    the boundaries U_t and L_t vary over time based on the filtered volatility:
-        U_t = μ + k·σ_t
-        L_t = μ - k·σ_t
-    
-    where σ_t = √P_t is the filtered standard deviation at each time step.
-    
-    Entry rules (same as Strategy C):
-    - Enter SHORT when spread re-enters from above U_t (prev > U_{t-1}, curr <= U_t)
-    - Enter LONG when spread re-enters from below L_t (prev < L_{t-1}, curr >= L_t)
-    
-    Exit rules:
-    - Take profit at mean C
-    - Stop-loss if spread crosses boundary wrong way after entry
-    
-    Parameters
-    ----------
-    spread : array-like
-        Spread series (filtered)
-    U_t : array-like
-        Time-varying upper threshold series (same length as spread)
-    L_t : array-like
-        Time-varying lower threshold series (same length as spread)
-    C : float
-        Mean (take-profit level, constant)
-        
+    Strategy C with time-varying boundaries (heteroskedastic illustration).
+
+    Positions:
+      +1 = long spread (Long A Short B)
+      -1 = short spread (Short A Long B)
+       0 = flat
+
+    Entry (re-entry / crossing rules):
+      - Enter SHORT when spread crosses DOWN through the upper boundary:
+            x_{t-1} > U_{t-1}  and  x_t <= U_t
+      - Enter LONG when spread crosses UP through the lower boundary:
+            x_{t-1} < L_{t-1}  and  x_t >= L_t
+
+    Exit:
+      - Take-profit when spread crosses the mean C (from either side, depending on position)
+      - Stop-loss when spread crosses the boundary "wrong way" after entry:
+            SHORT stop: x_{t-1} < U_{t-1} and x_t >= U_t
+            LONG  stop: x_{t-1} > L_{t-1} and x_t <= L_t
+
+    Notes:
+      - Requires U_t and L_t aligned in length with spread.
+      - For pd.Series inputs, indices must match exactly.
+
     Returns
     -------
     pd.Series
-        Signal series: +1 (long), -1 (short), 0 (flat)
+        Signal series (+1, -1, 0) with same index as `spread` if it is a Series.
     """
-    x, idx = _to_numpy(spread)
-    U_arr = np.asarray(U_t, dtype=float)
-    L_arr = np.asarray(L_t, dtype=float)
-    
+    # ---- Convert inputs ----
+    if isinstance(spread, pd.Series):
+        idx = spread.index
+        x = spread.to_numpy(dtype=float)
+        # Align boundaries by index if they are Series
+        if isinstance(U_t, pd.Series):
+            U_arr = U_t.reindex(idx).to_numpy(dtype=float)
+        else:
+            U_arr = np.asarray(U_t, dtype=float)
+
+        if isinstance(L_t, pd.Series):
+            L_arr = L_t.reindex(idx).to_numpy(dtype=float)
+        else:
+            L_arr = np.asarray(L_t, dtype=float)
+    else:
+        idx = None
+        x = np.asarray(spread, dtype=float)
+        U_arr = np.asarray(U_t, dtype=float)
+        L_arr = np.asarray(L_t, dtype=float)
+
+    # ---- Sanity checks ----
     n = len(x)
+    if len(U_arr) != n or len(L_arr) != n:
+        raise ValueError(
+            f"Length mismatch: len(spread)={n}, len(U_t)={len(U_arr)}, len(L_t)={len(L_arr)}"
+        )
+    if not np.isfinite(x).all():
+        raise ValueError("spread contains NaN/inf")
+    if not np.isfinite(U_arr).all() or not np.isfinite(L_arr).all():
+        raise ValueError("U_t or L_t contains NaN/inf after alignment/reindexing")
+
+    # Optional but helpful: ensure U is above L most of the time
+    if np.any(U_arr <= L_arr):
+        raise ValueError("Found U_t <= L_t for some t; boundaries must satisfy U_t > L_t.")
+
+    # ---- Core loop ----
     sig = np.zeros(n, dtype=np.int8)
-    
-    pos = 0
-    
+    pos: int = 0  # current position
+
     for t in range(1, n):
         prev_x, curr_x = x[t - 1], x[t]
         prev_U, curr_U = U_arr[t - 1], U_arr[t]
         prev_L, curr_L = L_arr[t - 1], L_arr[t]
-        
-        # Entry signals (using time-varying boundaries)
-        entry_short = (prev_x > prev_U) and (curr_x <= curr_U)  # Re-enter from above
-        entry_long = (prev_x < prev_L) and (curr_x >= curr_L)   # Re-enter from below
-        
-        # Exit at mean
+
+        # Entry crossings (re-entry)
+        enter_short = (prev_x > prev_U) and (curr_x <= curr_U)
+        enter_long  = (prev_x < prev_L) and (curr_x >= curr_L)
+
+        # Mean crossings for take-profit
         cross_down_C = (prev_x > C) and (curr_x <= C)
-        cross_up_C = (prev_x < C) and (curr_x >= C)
-        
-        # Stop-loss: wrong-way crossing
-        stop_short = (prev_x < prev_U) and (curr_x >= curr_U)  # Breaks out again
-        stop_long = (prev_x > prev_L) and (curr_x <= curr_L)   # Breaks down again
-        
+        cross_up_C   = (prev_x < C) and (curr_x >= C)
+
+        # Boundary crossings for stop-loss (wrong-way)
+        stop_short = (prev_x < prev_U) and (curr_x >= curr_U)  # crosses up through U
+        stop_long  = (prev_x > prev_L) and (curr_x <= curr_L)  # crosses down through L
+
         if pos == 0:
-            if entry_short:
+            if enter_short:
                 pos = -1
-            elif entry_long:
+            elif enter_long:
                 pos = +1
+
         elif pos == -1:
+            # short spread: profit when crossing down through mean, stop when breaking up through U
             if cross_down_C or stop_short:
                 pos = 0
-        elif pos == +1:
+
+        else:  # pos == +1
+            # long spread: profit when crossing up through mean, stop when breaking down through L
             if cross_up_C or stop_long:
                 pos = 0
-        
-        sig[t] = pos
-    
-    if idx is None:
-        return pd.Series(sig, name="signal")
-    return pd.Series(sig, index=idx, name="signal")
 
+        sig[t] = pos
+
+    return pd.Series(sig, index=idx, name="signal") if idx is not None else pd.Series(sig, name="signal")
 
 def generate_signals(
     spread: Union[pd.Series, np.ndarray],
