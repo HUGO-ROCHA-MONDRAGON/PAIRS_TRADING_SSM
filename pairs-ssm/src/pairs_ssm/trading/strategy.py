@@ -470,3 +470,77 @@ def find_trades_B(signals: pd.Series) -> List[Dict]:
         prev_sig = curr_sig
     
     return trades
+
+import numpy as np
+import pandas as pd
+from typing import Union
+
+def strategy_C_signals_timevarying_v2(
+    spread: Union[pd.Series, np.ndarray],
+    U_t: Union[pd.Series, np.ndarray],
+    L_t: Union[pd.Series, np.ndarray],
+    C: float,
+) -> pd.Series:
+
+    # --- convert + ALIGN on index if pandas ---
+    if isinstance(spread, pd.Series):
+        x = spread.values.astype(float)
+        idx = spread.index
+        if isinstance(U_t, pd.Series):
+            U = U_t.reindex(idx).values.astype(float)
+        else:
+            U = np.asarray(U_t, dtype=float)
+        if isinstance(L_t, pd.Series):
+            L = L_t.reindex(idx).values.astype(float)
+        else:
+            L = np.asarray(L_t, dtype=float)
+    else:
+        x = np.asarray(spread, dtype=float)
+        idx = None
+        U = np.asarray(U_t, dtype=float)
+        L = np.asarray(L_t, dtype=float)
+
+    n = len(x)
+    sig = np.zeros(n, dtype=np.int8)
+    pos = 0
+
+    for t in range(1, n):
+        # gaps to moving thresholds
+        gapU_prev = x[t-1] - U[t-1]
+        gapU_curr = x[t]   - U[t]
+        gapL_prev = x[t-1] - L[t-1]
+        gapL_curr = x[t]   - L[t]
+
+        # --- entries: re-entry (sign change across boundary) ---
+        entry_short = (gapU_prev > 0) and (gapU_curr <= 0)   # from above U back inside
+        entry_long  = (gapL_prev < 0) and (gapL_curr >= 0)   # from below L back inside
+
+        # --- exits: cross mean C (sign change around C) ---
+        gapC_prev = x[t-1] - C
+        gapC_curr = x[t]   - C
+        cross_down_C = (gapC_prev > 0) and (gapC_curr <= 0)
+        cross_up_C   = (gapC_prev < 0) and (gapC_curr >= 0)
+
+        # --- stop-loss: wrong-way breakout (sign change opposite direction) ---
+        # short stop: cross UP through U (from inside to above)
+        stop_short = (gapU_prev <= 0) and (gapU_curr > 0)
+        # long stop: cross DOWN through L (from inside to below)
+        stop_long  = (gapL_prev >= 0) and (gapL_curr < 0)
+
+        if pos == 0:
+            if entry_short:
+                pos = -1
+            elif entry_long:
+                pos = +1
+        elif pos == -1:
+            if cross_down_C or stop_short:
+                pos = 0
+        elif pos == +1:
+            if cross_up_C or stop_long:
+                pos = 0
+
+        sig[t] = pos
+
+    if idx is None:
+        return pd.Series(sig, name="signal")
+    return pd.Series(sig, index=idx, name="signal")
