@@ -19,6 +19,7 @@ src/pairs_ssm/filtering/__init__.py
 src/pairs_ssm/filtering/kalman_extended.py
 src/pairs_ssm/filtering/kalman_linear.py
 src/pairs_ssm/filtering/mle.py
+src/pairs_ssm/filtering/mle_joint.py
 src/pairs_ssm/filtering/qmckf.py
 src/pairs_ssm/models/__init__.py
 src/pairs_ssm/models/base_ssm.py
