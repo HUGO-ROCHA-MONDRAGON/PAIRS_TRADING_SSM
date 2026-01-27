@@ -596,3 +596,342 @@ PAPER_TABLE1 = {
     ('model5', 'B'): {'U_cr': 0.5, 'L_cr': -0.5, 'CR': 0.5760, 'U_sr': 0.5, 'L_sr': -0.5, 'SR': 0.1145},
     ('model5', 'C'): {'U_cr': 1.2, 'L_cr': -1.2, 'CR': 0.2423, 'U_sr': 1.4, 'L_sr': -1.4, 'SR': 0.0961},
 }
+
+@njit
+def _simulate_model5_noclip(T: int, x0: float, eta_t: np.ndarray) -> np.ndarray:
+    """Model A3 (Appendix): Nonlinear + t(3), NO CLIPPING."""
+    theta1 = 0.9
+    theta2 = 0.2590
+    sigma = 0.0049 / np.sqrt(3)
+    x = np.zeros(T)
+    x[0] = x0
+    for t in range(T - 1):
+        x[t + 1] = theta1 * x[t] + theta2 * x[t]**2 + sigma * eta_t[t]
+    return x
+
+def _simulate_one_path_s1(model: str, T: int, rng: np.random.Generator, max_tries: int = 50) -> np.ndarray:
+    for _ in range(max_tries):
+        if model in ["A1", "A2"]:
+            eta = rng.standard_normal(T)
+        else:  # A3 uses t(3)
+            eta = rng.standard_t(df=3, size=T)
+
+        if model == "A1":
+            x = _simulate_model1(T, 0.0, eta)
+        elif model == "A2":
+            x = _simulate_model3(T, 0.0, eta)
+        elif model == "A3":
+            x = _simulate_model5_noclip(T, 0.0, eta)
+        else:
+            raise ValueError(f"Unknown S1 model: {model}")
+
+        if np.isfinite(x).all():
+            return x
+
+    # If it keeps exploding, return last attempt (will likely be non-finite)
+    return x
+
+def simulate_paths_S1(
+    model: str,   # "A1", "A2", "A3"
+    N: int,
+    T: int,
+    seed: int = 42,
+) -> Tuple[np.ndarray, float, float]:
+    rng = np.random.default_rng(seed)
+    paths = np.zeros((N, T))
+
+    for i in range(N):
+        paths[i] = _simulate_one_path_s1(model, T, rng)
+
+    # Drop any remaining non-finite paths (rare if max_tries is decent)
+    mask = np.isfinite(paths).all(axis=1)
+    paths = paths[mask]
+    if paths.shape[0] == 0:
+        raise RuntimeError("All simulated paths became non-finite (A3 exploded). Increase max_tries or adjust T.")
+
+    C = float(paths.mean())
+    sigma = float(np.mean([np.std(paths[i]) for i in range(paths.shape[0])]))
+
+    return paths, C, sigma
+
+@njit
+def _eval_path_D(
+    x: np.ndarray, U: float, L: float, C: float,
+    C_minus: float, C_plus: float,
+    tc: float
+) -> Tuple[float, float, float, int]:
+    """
+    Strategy D: A-entry, but exit at shifted close levels:
+      short closes when crossing DOWN through C_minus
+      long  closes when crossing UP through C_plus
+    """
+    T = len(x)
+    pos = 0
+
+    cr = 0.0
+    sum_p = 0.0
+    sum_p2 = 0.0
+    n_steps = T - 1
+
+    for t in range(1, T):
+        dx = x[t] - x[t - 1]
+        pnl = pos * dx
+
+        prev = x[t - 1]
+        cur = x[t]
+
+        new_pos = pos
+        if pos == 0:
+            if cur >= U:
+                new_pos = -1
+            elif cur <= L:
+                new_pos = 1
+        elif pos == 1:
+            # long: close when cross UP through C_plus
+            if prev < C_plus and cur >= C_plus:
+                new_pos = 0
+        elif pos == -1:
+            # short: close when cross DOWN through C_minus
+            if prev > C_minus and cur <= C_minus:
+                new_pos = 0
+
+        if new_pos != pos:
+            pnl -= tc * abs(new_pos - pos)
+
+        pos = new_pos
+        cr += pnl
+        sum_p += pnl
+        sum_p2 += pnl * pnl
+
+    return cr, sum_p, sum_p2, n_steps
+
+
+@njit
+def _eval_path_E(
+    x: np.ndarray, U: float, L: float, C: float,
+    C_minus: float, C_plus: float,
+    tc: float
+) -> Tuple[float, float, float, int]:
+    """
+    Strategy E: C-entry/stop-loss, but take-profit at shifted levels:
+      short TP when crossing DOWN through C_minus
+      long  TP when crossing UP through C_plus
+    Stop-loss same as Strategy C.
+    PnL uses NEW position (as in Strategy C).
+    """
+    T = len(x)
+    pos = 0
+
+    cr = 0.0
+    sum_p = 0.0
+    sum_p2 = 0.0
+    n_steps = T - 1
+
+    for t in range(1, T):
+        dx = x[t] - x[t - 1]
+        prev = x[t - 1]
+        cur = x[t]
+
+        # Entry (same as C)
+        entry_short = (prev > U and cur <= U)
+        entry_long  = (prev < L and cur >= L)
+
+        # Take-profit at shifted levels
+        tp_short = (prev > C_minus and cur <= C_minus)
+        tp_long  = (prev < C_plus  and cur >= C_plus)
+
+        # Stop-loss (same as C)
+        stop_short = (prev < U and cur >= U)
+        stop_long  = (prev > L and cur <= L)
+
+        new_pos = pos
+        if pos == 0:
+            if entry_short:
+                new_pos = -1
+            elif entry_long:
+                new_pos = 1
+        elif pos == 1:
+            if tp_long or stop_long:
+                new_pos = 0
+        elif pos == -1:
+            if tp_short or stop_short:
+                new_pos = 0
+
+        # KEY: PnL uses NEW position (Strategy C convention)
+        pnl = new_pos * dx
+
+        if new_pos != pos:
+            pnl -= tc * abs(new_pos - pos)
+
+        pos = new_pos
+        cr += pnl
+        sum_p += pnl
+        sum_p2 += pnl * pnl
+
+    return cr, sum_p, sum_p2, n_steps
+@njit(parallel=True)
+def _grid_search_numba_S1_DE(
+    paths: np.ndarray,         # (N, T)
+    C: float,
+    sigma_avg: float,
+    U_grid: np.ndarray,        # sigma units: [0.1..2.5]
+    delta_grid: np.ndarray,    # [-0.5..1.0]
+    strategy_id: int,          # 4 = D, 5 = E
+    tc: float
+) -> Tuple[np.ndarray, np.ndarray]:
+    N, T = paths.shape
+    nU = len(U_grid)
+    nD = len(delta_grid)
+    K = nU * nD
+
+    CR_out = np.full(K, -np.inf)
+    SR_out = np.full(K, -np.inf)
+
+    for k in prange(K):
+        i = k // nD
+        j = k % nD
+
+        u_sigma = U_grid[i]
+        delta = delta_grid[j]
+
+        if u_sigma <= 0:
+            continue
+
+        # Enforce L = -U (in sigma units), converted to levels
+        U_level = C + u_sigma * sigma_avg
+        L_level = C - u_sigma * sigma_avg
+
+        # Delta is based on distance from mean to boundary
+        U_dist = U_level - C
+        Delta = delta * U_dist
+        C_minus = C - Delta
+        C_plus  = C + Delta
+
+        cr_sum = 0.0
+        sr_sum = 0.0
+
+        for n in range(N):
+            x = paths[n, :]
+            if not np.isfinite(x).all():
+                continue
+
+            if strategy_id == 4:
+                cr, s1, s2, n_steps = _eval_path_D(x, U_level, L_level, C, C_minus, C_plus, tc)
+            else:
+                cr, s1, s2, n_steps = _eval_path_E(x, U_level, L_level, C, C_minus, C_plus, tc)
+
+            sr = _sharpe_from_sums(s1, s2, n_steps)
+            cr_sum += cr
+            sr_sum += sr
+
+        CR_out[k] = cr_sum / N
+        SR_out[k] = sr_sum / N
+
+    return CR_out, SR_out
+
+@dataclass
+class TableS1Result:
+    model: str       # "A1","A2","A3"
+    strategy: str    # "D","E"
+    U_star_cr: float
+    delta_star_cr: float
+    CR: float
+    U_star_sr: float
+    delta_star_sr: float
+    SR: float
+
+
+def run_tableS1_optimization(
+    model: str,              # "A1","A2","A3"
+    strategy: str,           # "D","E"
+    N: int = 10000,
+    T: int = 1000,
+    cost_bp: float = 20.0,
+    seed: int = 42,
+) -> TableS1Result:
+
+    paths, C, sigma_avg = simulate_paths_S1(model, N, T, seed)
+
+    U_grid = np.arange(0.1, 2.55, 0.1)
+    delta_grid = np.arange(-0.5, 1.01, 0.1)
+
+    tc = cost_bp / 10000
+    strategy_id = {"D": 4, "E": 5}[strategy.upper()]
+
+    CR_arr, SR_arr = _grid_search_numba_S1_DE(paths, C, sigma_avg, U_grid, delta_grid, strategy_id, tc)
+
+    k_cr = np.nanargmax(CR_arr)
+    i_cr, j_cr = k_cr // len(delta_grid), k_cr % len(delta_grid)
+
+    k_sr = np.nanargmax(SR_arr)
+    i_sr, j_sr = k_sr // len(delta_grid), k_sr % len(delta_grid)
+
+    return TableS1Result(
+        model=model,
+        strategy=strategy.upper(),
+        U_star_cr=float(U_grid[i_cr]),
+        delta_star_cr=float(delta_grid[j_cr]),
+        CR=float(CR_arr[k_cr]),
+        U_star_sr=float(U_grid[i_sr]),
+        delta_star_sr=float(delta_grid[j_sr]),
+        SR=float(SR_arr[k_sr]),
+    )
+
+def replicate_tableS1(
+    N: int = 10000,
+    T: int = 1000,
+    cost_bp: float = 20.0,
+    seed: int = 42,
+    verbose: bool = True,
+):
+    import time
+
+    models = ["A1", "A2", "A3"]
+    strategies = ["D", "E"]
+    results = {}
+
+    if verbose:
+        print(f"Replicating Table S1: N={N}, T={T}, cost={cost_bp}bp")
+        print(f"Numba available: {NUMBA_AVAILABLE}")
+        print("=" * 70)
+
+    t0 = time.time()
+
+    for model in models:
+        if verbose:
+            print(f"\n{model}")
+        paths, C, sigma_avg = simulate_paths_S1(model, N, T, seed)
+        if verbose:
+            print(f"  Paths simulated: N_eff={paths.shape[0]} (C={C:.6f}, σ={sigma_avg:.6f})")
+
+        U_grid = np.arange(0.1, 2.55, 0.1)
+        delta_grid = np.arange(-0.5, 1.01, 0.1)
+        tc = cost_bp / 10000
+
+        for strat in strategies:
+            sid = {"D": 4, "E": 5}[strat]
+            CR_arr, SR_arr = _grid_search_numba_S1_DE(paths, C, sigma_avg, U_grid, delta_grid, sid, tc)
+
+            k_cr = np.nanargmax(CR_arr)
+            i_cr, j_cr = k_cr // len(delta_grid), k_cr % len(delta_grid)
+
+            k_sr = np.nanargmax(SR_arr)
+            i_sr, j_sr = k_sr // len(delta_grid), k_sr % len(delta_grid)
+
+            res = TableS1Result(
+                model=model, strategy=strat,
+                U_star_cr=float(U_grid[i_cr]), delta_star_cr=float(delta_grid[j_cr]), CR=float(CR_arr[k_cr]),
+                U_star_sr=float(U_grid[i_sr]), delta_star_sr=float(delta_grid[j_sr]), SR=float(SR_arr[k_sr]),
+            )
+            results[(model, strat)] = res
+
+            if verbose:
+                print(f"  {strat}: "
+                      f"CR: U*={res.U_star_cr:.1f}σ, δ*={res.delta_star_cr:.1f}, CR={res.CR:.4f} | "
+                      f"SR: U*={res.U_star_sr:.1f}σ, δ*={res.delta_star_sr:.1f}, SR={res.SR:.4f}")
+
+    if verbose:
+        print("\n" + "=" * 70)
+        print(f"✅ Table S1 complete in {time.time() - t0:.1f}s")
+
+    return results

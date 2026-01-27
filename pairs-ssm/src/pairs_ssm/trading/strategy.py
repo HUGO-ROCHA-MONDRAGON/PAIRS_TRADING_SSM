@@ -9,7 +9,7 @@ Three benchmark strategies:
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-from typing import Union, Literal, List, Dict
+from typing import Union, Literal, List, Dict, Optional
 
 
 def _to_numpy(spread: Union[pd.Series, np.ndarray]) -> tuple:
@@ -497,61 +497,158 @@ def find_trades_B(signals: pd.Series) -> List[Dict]:
     
     return trades
 
-import numpy as np
-import pandas as pd
-from typing import Union
 
-def strategy_C_signals_timevarying_v2(
-    spread: Union[pd.Series, np.ndarray],
-    U_t: Union[pd.Series, np.ndarray],
-    L_t: Union[pd.Series, np.ndarray],
-    C: float,
-) -> pd.Series:
-
-    # --- convert + ALIGN on index if pandas ---
-    if isinstance(spread, pd.Series):
-        x = spread.values.astype(float)
-        idx = spread.index
-        if isinstance(U_t, pd.Series):
-            U = U_t.reindex(idx).values.astype(float)
-        else:
-            U = np.asarray(U_t, dtype=float)
-        if isinstance(L_t, pd.Series):
-            L = L_t.reindex(idx).values.astype(float)
-        else:
-            L = np.asarray(L_t, dtype=float)
+def _as_array(x: Union[float, np.ndarray, pd.Series], n: int) -> np.ndarray:
+    """Scalar -> (n,), Series -> values, ndarray -> array; best-effort broadcast."""
+    if isinstance(x, pd.Series):
+        arr = x.values.astype(float)
     else:
-        x = np.asarray(spread, dtype=float)
-        idx = None
-        U = np.asarray(U_t, dtype=float)
-        L = np.asarray(L_t, dtype=float)
+        arr = np.asarray(x, dtype=float)
 
+    if arr.ndim == 0:
+        return np.full(n, float(arr))
+    if len(arr) == 1 and n != 1:
+        return np.full(n, float(arr[0]))
+    return arr
+
+
+def compute_Cpm(
+    C: Union[float, np.ndarray, pd.Series],
+    U: Union[float, np.ndarray, pd.Series],
+    delta: float,
+    n: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute C_minus and C_plus arrays from C, U, delta."""
+    C_arr = _as_array(C, n)
+    U_arr = _as_array(U, n)
+    Delta = delta * U_arr
+    return C_arr - Delta, C_arr + Delta
+
+
+def strategy_D_signals(
+    spread: Union[pd.Series, np.ndarray],
+    U: Union[float, np.ndarray, pd.Series],
+    L: Union[float, np.ndarray, pd.Series],
+    *,
+    # You can pass either (C_minus, C_plus) OR (C and delta)
+    C_minus: Optional[Union[float, np.ndarray, pd.Series]] = None,
+    C_plus: Optional[Union[float, np.ndarray, pd.Series]] = None,
+    C: Optional[Union[float, np.ndarray, pd.Series]] = None,
+    delta: Optional[float] = None,
+    exit_on_crossing: bool = True,
+) -> pd.Series:
+    """
+    Strategy D: same entry as Strategy A, but exit at shifted levels:
+      - short exits when spread crosses DOWN through C_minus
+      - long exits when spread crosses UP through C_plus
+
+    If exit_on_crossing=False, uses level checks (like your Strategy A).
+    """
+    x, idx = _to_numpy(spread)
     n = len(x)
+
+    U_arr = _as_array(U, n)
+    L_arr = _as_array(L, n)
+
+    # Build C_minus / C_plus
+    if C_minus is None or C_plus is None:
+        if C is None or delta is None:
+            raise ValueError("Provide either (C_minus, C_plus) or (C and delta).")
+        C_minus_arr, C_plus_arr = compute_Cpm(C=C, U=U, delta=float(delta), n=n)
+    else:
+        C_minus_arr = _as_array(C_minus, n)
+        C_plus_arr = _as_array(C_plus, n)
+
+    sig = np.zeros(n, dtype=np.int8)
+    pos = 0
+
+    for t in range(n):
+        u_t, l_t = U_arr[t], L_arr[t]
+        cm_t, cp_t = C_minus_arr[t], C_plus_arr[t]
+
+        if pos == 0:
+            # Entry (same as A)
+            if x[t] >= u_t:
+                pos = -1
+            elif x[t] <= l_t:
+                pos = +1
+
+        else:
+            # Exit (shifted close)
+            if exit_on_crossing and t > 0:
+                cm_prev, cp_prev = C_minus_arr[t - 1], C_plus_arr[t - 1]
+                prev, curr = x[t - 1], x[t]
+
+                if pos == -1 and (prev > cm_prev) and (curr <= cm_t):
+                    pos = 0
+                elif pos == +1 and (prev < cp_prev) and (curr >= cp_t):
+                    pos = 0
+            else:
+                # Level-based (A-style)
+                if (pos == -1 and x[t] <= cm_t) or (pos == +1 and x[t] >= cp_t):
+                    pos = 0
+
+        sig[t] = pos
+
+    return pd.Series(sig, index=idx, name="signal") if idx is not None else pd.Series(sig, name="signal")
+
+
+def strategy_E_signals(
+    spread: Union[pd.Series, np.ndarray],
+    U: Union[float, np.ndarray, pd.Series],
+    L: Union[float, np.ndarray, pd.Series],
+    *,
+    # You can pass either (C_minus, C_plus) OR (C and delta)
+    C_minus: Optional[Union[float, np.ndarray, pd.Series]] = None,
+    C_plus: Optional[Union[float, np.ndarray, pd.Series]] = None,
+    C: Optional[Union[float, np.ndarray, pd.Series]] = None,
+    delta: Optional[float] = None,
+) -> pd.Series:
+    """
+    Strategy E: same entry + stop-loss logic as Strategy C,
+    but take-profit uses shifted levels:
+      - short TP when cross DOWN through C_minus
+      - long  TP when cross UP through C_plus
+    Stop-loss remains "wrong-way breakout" as in Strategy C.
+    """
+    x, idx = _to_numpy(spread)
+    n = len(x)
+
+    U_arr = _as_array(U, n)
+    L_arr = _as_array(L, n)
+
+    # Build C_minus / C_plus
+    if C_minus is None or C_plus is None:
+        if C is None or delta is None:
+            raise ValueError("Provide either (C_minus, C_plus) or (C and delta).")
+        C_minus_arr, C_plus_arr = compute_Cpm(C=C, U=U, delta=float(delta), n=n)
+    else:
+        C_minus_arr = _as_array(C_minus, n)
+        C_plus_arr = _as_array(C_plus, n)
+
     sig = np.zeros(n, dtype=np.int8)
     pos = 0
 
     for t in range(1, n):
-        # gaps to moving thresholds
-        gapU_prev = x[t-1] - U[t-1]
-        gapU_curr = x[t]   - U[t]
-        gapL_prev = x[t-1] - L[t-1]
-        gapL_curr = x[t]   - L[t]
+        prev, curr = x[t - 1], x[t]
 
-        # --- entries: re-entry (sign change across boundary) ---
-        entry_short = (gapU_prev > 0) and (gapU_curr <= 0)   # from above U back inside
-        entry_long  = (gapL_prev < 0) and (gapL_curr >= 0)   # from below L back inside
+        u_prev, u_curr = U_arr[t - 1], U_arr[t]
+        l_prev, l_curr = L_arr[t - 1], L_arr[t]
 
-        # --- exits: cross mean C (sign change around C) ---
-        gapC_prev = x[t-1] - C
-        gapC_curr = x[t]   - C
-        cross_down_C = (gapC_prev > 0) and (gapC_curr <= 0)
-        cross_up_C   = (gapC_prev < 0) and (gapC_curr >= 0)
+        cm_prev, cm_curr = C_minus_arr[t - 1], C_minus_arr[t]
+        cp_prev, cp_curr = C_plus_arr[t - 1], C_plus_arr[t]
 
-        # --- stop-loss: wrong-way breakout (sign change opposite direction) ---
-        # short stop: cross UP through U (from inside to above)
-        stop_short = (gapU_prev <= 0) and (gapU_curr > 0)
-        # long stop: cross DOWN through L (from inside to below)
-        stop_long  = (gapL_prev >= 0) and (gapL_curr < 0)
+        # Entry (same as C)
+        entry_short = (prev > u_prev) and (curr <= u_curr)   # re-enter from above U
+        entry_long  = (prev < l_prev) and (curr >= l_curr)   # re-enter from below L
+
+        # Take-profit at shifted center
+        tp_short = (prev > cm_prev) and (curr <= cm_curr)    # cross down through C_minus
+        tp_long  = (prev < cp_prev) and (curr >= cp_curr)    # cross up through C_plus
+
+        # Stop-loss (same as C)
+        stop_short = (prev < u_prev) and (curr >= u_curr)    # breaks out again above U
+        stop_long  = (prev > l_prev) and (curr <= l_curr)    # breaks down again below L
 
         if pos == 0:
             if entry_short:
@@ -559,14 +656,40 @@ def strategy_C_signals_timevarying_v2(
             elif entry_long:
                 pos = +1
         elif pos == -1:
-            if cross_down_C or stop_short:
+            if tp_short or stop_short:
                 pos = 0
         elif pos == +1:
-            if cross_up_C or stop_long:
+            if tp_long or stop_long:
                 pos = 0
 
         sig[t] = pos
 
-    if idx is None:
-        return pd.Series(sig, name="signal")
-    return pd.Series(sig, index=idx, name="signal")
+    return pd.Series(sig, index=idx, name="signal") if idx is not None else pd.Series(sig, name="signal")
+
+
+def find_trades_safe(signals: pd.Series, close_open_end: bool = True):
+    trades = []
+    in_trade = False
+    entry_idx = None
+    trade_type = None
+
+    # Handle if we start already in a position at t=0
+    if signals.iloc[0] != 0:
+        in_trade = True
+        entry_idx = signals.index[0]
+        trade_type = 'short' if signals.iloc[0] == -1 else 'long'
+
+    for t in range(1, len(signals)):
+        if not in_trade and signals.iloc[t] != 0:
+            in_trade = True
+            entry_idx = signals.index[t]
+            trade_type = 'short' if signals.iloc[t] == -1 else 'long'
+        elif in_trade and signals.iloc[t] == 0:
+            trades.append({'entry': entry_idx, 'exit': signals.index[t], 'type': trade_type})
+            in_trade = False
+
+    # Close open trade at the end if requested
+    if close_open_end and in_trade:
+        trades.append({'entry': entry_idx, 'exit': signals.index[-1], 'type': trade_type})
+
+    return trades
