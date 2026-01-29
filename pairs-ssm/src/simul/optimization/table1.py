@@ -1,7 +1,15 @@
+"""
+Table 1 Replication from Zhang (2021).
+
+Optimal Selection of Trading Rule for Cumulative Return and Sharpe Ratio.
+Uses numba for performance (~100x faster than pure Python).
+"""
+
 import numpy as np
 from typing import Dict, Tuple, Optional
 from dataclasses import dataclass
 
+# Try to use numba for speed
 try:
     from numba import njit, prange
     NUMBA_AVAILABLE = True
@@ -15,8 +23,13 @@ except ImportError:
         return range(x)
 
 
+# =============================================================================
+# Sharpe Ratio Helper (non-annualized as in paper)
+# =============================================================================
+
 @njit
 def _sharpe_from_sums(sum_p: float, sum_p2: float, n: int) -> float:
+    """Compute Sharpe ratio from running sums (non-annualized)."""
     if n <= 1:
         return 0.0
     mean = sum_p / n
@@ -26,10 +39,20 @@ def _sharpe_from_sums(sum_p: float, sum_p2: float, n: int) -> float:
     return mean / np.sqrt(var)
 
 
+# =============================================================================
+# Strategy Evaluators (following Zhang 2021 exactly)
+# =============================================================================
+
 @njit
 def _eval_path_A(x: np.ndarray, U: float, L: float, C: float, tc: float) -> Tuple[float, float, float, int]:
+    """
+    Strategy A: Open at extremes (U/L), close at mean (C).
+    - Short when spread >= U
+    - Long when spread <= L  
+    - Close position when spread returns to C
+    """
     T = len(x)
-    pos = 0
+    pos = 0  # 0: flat, 1: long, -1: short
     
     cr = 0.0
     sum_p = 0.0
@@ -43,16 +66,17 @@ def _eval_path_A(x: np.ndarray, U: float, L: float, C: float, tc: float) -> Tupl
         new_pos = pos
         if pos == 0:
             if x[t] >= U:
-                new_pos = -1
+                new_pos = -1  # Short at upper bound
             elif x[t] <= L:
-                new_pos = 1
+                new_pos = 1   # Long at lower bound
         elif pos == 1:
             if x[t] >= C:
-                new_pos = 0
+                new_pos = 0   # Close long at mean
         elif pos == -1:
             if x[t] <= C:
-                new_pos = 0
+                new_pos = 0   # Close short at mean
         
+        # Transaction cost on position change
         if new_pos != pos:
             pnl -= tc * abs(new_pos - pos)
         
@@ -66,6 +90,12 @@ def _eval_path_A(x: np.ndarray, U: float, L: float, C: float, tc: float) -> Tupl
 
 @njit
 def _eval_path_B(x: np.ndarray, U: float, L: float, tc: float) -> Tuple[float, float, float, int]:
+    """
+    Strategy B: Position changes when crossing boundaries (can flip directly).
+    - Cross U from below -> go short (or flip from long to short)
+    - Cross L from above -> go long (or flip from short to long)
+    No explicit close - position reverses at boundaries.
+    """
     T = len(x)
     pos = 0
     
@@ -82,10 +112,11 @@ def _eval_path_B(x: np.ndarray, U: float, L: float, tc: float) -> Tuple[float, f
         cur = x[t]
         
         new_pos = pos
+        # Direct position changes on boundary crossing
         if prev < U and cur >= U:
-            new_pos = -1
+            new_pos = -1  # Short
         elif prev > L and cur <= L:
-            new_pos = 1
+            new_pos = 1   # Long
         
         if new_pos != pos:
             pnl -= tc * abs(new_pos - pos)
@@ -100,6 +131,14 @@ def _eval_path_B(x: np.ndarray, U: float, L: float, tc: float) -> Tuple[float, f
 
 @njit
 def _eval_path_C(x: np.ndarray, U: float, L: float, C: float, tc: float) -> Tuple[float, float, float, int]:
+    """
+    Strategy C: Re-entry with stop-loss.
+    - Open when crossing boundary toward mean
+    - Close at mean (profit) OR stop-loss if crosses boundary away from mean
+    
+    KEY DIFFERENCE from A/B: PnL calculated using NEW position (after decision).
+    This is because crossing-based entry captures the move that triggered entry.
+    """
     T = len(x)
     pos = 0
     
@@ -113,14 +152,17 @@ def _eval_path_C(x: np.ndarray, U: float, L: float, C: float, tc: float) -> Tupl
         prev = x[t-1]
         cur = x[t]
         
-        entry_short = (prev > U and cur <= U)
-        entry_long = (prev < L and cur >= L)
+        # Entry: crossing boundary from outside toward mean
+        entry_short = (prev > U and cur <= U)  # Cross U from above
+        entry_long = (prev < L and cur >= L)   # Cross L from below
         
+        # Exit at mean
         cross_down_C = (prev > C and cur <= C)
         cross_up_C = (prev < C and cur >= C)
         
-        stop_short = (prev < U and cur >= U)
-        stop_long = (prev > L and cur <= L)
+        # Stop-loss: crossing back outside
+        stop_short = (prev < U and cur >= U)   # Cross U from below
+        stop_long = (prev > L and cur <= L)    # Cross L from above
         
         new_pos = pos
         if pos == 0:
@@ -135,6 +177,7 @@ def _eval_path_C(x: np.ndarray, U: float, L: float, C: float, tc: float) -> Tupl
             if cross_down_C or stop_short:
                 new_pos = 0
         
+        # KEY: Use NEW position for PnL (crossing-based entry)
         pnl = new_pos * dx
         
         if new_pos != pos:
@@ -148,16 +191,26 @@ def _eval_path_C(x: np.ndarray, U: float, L: float, C: float, tc: float) -> Tupl
     return cr, sum_p, sum_p2, n_steps
 
 
+# =============================================================================
+# Grid Search with Numba Parallelization
+# =============================================================================
+
 @njit(parallel=True)
 def _grid_search_numba(
-    paths: np.ndarray,
-    C: float,
-    sigma_avg: float,
-    U_grid: np.ndarray,
-    L_grid: np.ndarray,
-    strategy_id: int,
-    tc: float,
+    paths: np.ndarray,      # (N, T) - raw paths
+    C: float,               # Center (mean across all paths)
+    sigma_avg: float,       # Average std across all paths
+    U_grid: np.ndarray,     # Upper thresholds in sigma units
+    L_grid: np.ndarray,     # Lower thresholds in sigma units  
+    strategy_id: int,       # 1=A, 2=B, 3=C
+    tc: float,              # Transaction cost (total round-trip)
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Parallel grid search over all (U, L) combinations.
+    
+    U and L are in sigma units - converted to absolute using sigma_avg.
+    Returns CR and SR arrays of shape (nU * nL,).
+    """
     N, T = paths.shape
     nU = len(U_grid)
     nL = len(L_grid)
@@ -169,12 +222,14 @@ def _grid_search_numba(
     for k in prange(K):
         i = k // nL
         j = k % nL
-        u_sigma = U_grid[i]
-        l_sigma = L_grid[j]
+        u_sigma = U_grid[i]  # In sigma units
+        l_sigma = L_grid[j]  # In sigma units
         
+        # Skip invalid combinations (L must be < 0, U must be > 0)
         if l_sigma >= 0 or u_sigma <= 0 or l_sigma >= u_sigma:
             continue
         
+        # Convert to absolute thresholds (same for all paths)
         U = C + u_sigma * sigma_avg
         L = C + l_sigma * sigma_avg
         
@@ -201,8 +256,13 @@ def _grid_search_numba(
     return CR_out, SR_out
 
 
+# =============================================================================
+# Model Simulators (Models 1-5 from Zhang 2021)
+# =============================================================================
+
 @njit
 def _simulate_model1(T: int, x0: float, eta: np.ndarray) -> np.ndarray:
+    """Model 1: Linear + Gaussian + Homoscedastic"""
     theta1 = 0.9590
     sigma = 0.0049
     x = np.zeros(T)
@@ -214,12 +274,14 @@ def _simulate_model1(T: int, x0: float, eta: np.ndarray) -> np.ndarray:
 
 @njit
 def _simulate_model2(T: int, x0: float, eta: np.ndarray) -> np.ndarray:
+    """Model 2: Nonlinear + Gaussian"""
     theta1 = 0.9
     theta2 = 0.2590
     sigma = 0.0049
     x = np.zeros(T)
     x[0] = x0
     for t in range(T - 1):
+        # Clip to prevent explosion
         x_clipped = max(min(x[t], 1.0), -1.0)
         x[t + 1] = theta1 * x_clipped + theta2 * x_clipped**2 + sigma * eta[t]
     return x
@@ -227,6 +289,7 @@ def _simulate_model2(T: int, x0: float, eta: np.ndarray) -> np.ndarray:
 
 @njit
 def _simulate_model3(T: int, x0: float, eta: np.ndarray) -> np.ndarray:
+    """Model 3: Linear + Heteroscedastic"""
     theta1 = 0.9590
     q_base = 0.00089
     q_het = 0.08
@@ -240,8 +303,9 @@ def _simulate_model3(T: int, x0: float, eta: np.ndarray) -> np.ndarray:
 
 @njit
 def _simulate_model4(T: int, x0: float, eta_t: np.ndarray) -> np.ndarray:
+    """Model 4: Linear + t-distributed (nu=3)"""
     theta1 = 0.9590
-    sigma = 0.0049 / np.sqrt(3)
+    sigma = 0.0049 / np.sqrt(3)  # Scale for variance matching
     x = np.zeros(T)
     x[0] = x0
     for t in range(T - 1):
@@ -251,12 +315,14 @@ def _simulate_model4(T: int, x0: float, eta_t: np.ndarray) -> np.ndarray:
 
 @njit
 def _simulate_model5(T: int, x0: float, eta_t: np.ndarray) -> np.ndarray:
+    """Model 5: Nonlinear + t-distributed"""
     theta1 = 0.9
     theta2 = 0.2590
     sigma = 0.0049 / np.sqrt(3)
     x = np.zeros(T)
     x[0] = x0
     for t in range(T - 1):
+        # Clip x[t] to prevent explosion from quadratic term
         x_clipped = max(min(x[t], 1.0), -1.0)
         x[t + 1] = theta1 * x_clipped + theta2 * x_clipped**2 + sigma * eta_t[t]
     return x
@@ -269,13 +335,38 @@ def simulate_paths(
     seed: int = 42,
     standardize: bool = False,
 ) -> Tuple[np.ndarray, float, float]:
+    """
+    Simulate N paths of length T for the specified model.
+    
+    Parameters
+    ----------
+    model : str
+        One of 'model1', 'model2', 'model3', 'model4', 'model5'
+    N : int
+        Number of paths
+    T : int
+        Length of each path
+    seed : int
+        Random seed
+    standardize : bool
+        If True, standardize paths (for internal use)
+        
+    Returns
+    -------
+    paths : ndarray of shape (N, T)
+        Simulated paths (raw, not standardized)
+    C : float
+        Global mean across ALL paths and time steps
+    sigma : float
+        Mean of per-path standard deviations (better matches paper results)
+    """
     rng = np.random.default_rng(seed)
     paths = np.zeros((N, T))
     
     for i in range(N):
         if model in ['model1', 'model2', 'model3']:
             eta = rng.standard_normal(T)
-        else:
+        else:  # model4, model5 use t-distribution
             eta = rng.standard_t(df=3, size=T)
         
         if model == 'model1':
@@ -293,14 +384,23 @@ def simulate_paths(
         
         paths[i] = x
     
+    # Compute global mean across all paths and time steps
     C = float(paths.mean())
+    
+    # Compute MEAN of per-path standard deviations
+    # This better matches paper results, especially for heteroscedastic models
     sigma = float(np.mean([np.std(paths[i]) for i in range(N)]))
     
     return paths, C, sigma
 
 
+# =============================================================================
+# Main Table 1 Replication Function
+# =============================================================================
+
 @dataclass
 class Table1Result:
+    """Result for one (model, strategy) combination."""
     model: str
     strategy: str
     U_star_cr: float
@@ -319,21 +419,53 @@ def run_table1_optimization(
     cost_bp: float = 20.0,
     seed: int = 42,
 ) -> Table1Result:
+    """
+    Run Table 1 optimization for one (model, strategy) combination.
+    
+    Parameters
+    ----------
+    model : str
+        Model name ('model1' to 'model5')
+    strategy : str
+        Strategy ('A', 'B', or 'C')
+    N : int
+        Number of Monte Carlo simulations
+    T : int
+        Length of each simulation
+    cost_bp : float
+        Transaction cost in basis points (per asset)
+    seed : int
+        Random seed
+        
+    Returns
+    -------
+    Table1Result
+        Optimal thresholds and performance metrics
+    """
+    # Simulate paths - returns global C and sigma
     paths, C, sigma_avg = simulate_paths(model, N, T, seed)
     
-    U_grid = np.arange(0.1, 2.55, 0.1)
-    L_grid = np.arange(-2.5, -0.05, 0.1)
+    # Grid definition (sigma units)
+    U_grid = np.arange(0.1, 2.55, 0.1)  # [0.1, 0.2, ..., 2.5]
+    L_grid = np.arange(-2.5, -0.05, 0.1)  # [-2.5, -2.4, ..., -0.1]
     
+    # Transaction cost: 20bp per trade
+    # Paper says "20bp per asset, 40bp per complete trading (round-trip)"
+    # This means each single trade (open OR close) costs 20bp
     tc = cost_bp / 10000
     
+    # Strategy ID
     strategy_id = {'A': 1, 'B': 2, 'C': 3}[strategy.upper()]
     
+    # Run grid search
     CR_arr, SR_arr = _grid_search_numba(paths, C, sigma_avg, U_grid, L_grid, strategy_id, tc)
     
+    # Find optimal for CR
     k_cr = np.nanargmax(CR_arr)
     i_cr = k_cr // len(L_grid)
     j_cr = k_cr % len(L_grid)
     
+    # Find optimal for SR
     k_sr = np.nanargmax(SR_arr)
     i_sr = k_sr // len(L_grid)
     j_sr = k_sr % len(L_grid)
@@ -357,6 +489,27 @@ def replicate_table1(
     seed: int = 42,
     verbose: bool = True,
 ) -> Dict[Tuple[str, str], Table1Result]:
+    """
+    Replicate full Table 1 from Zhang (2021).
+    
+    Parameters
+    ----------
+    N : int
+        Number of Monte Carlo simulations
+    T : int
+        Length of each simulation
+    cost_bp : float
+        Transaction cost in basis points
+    seed : int
+        Random seed
+    verbose : bool
+        Print progress
+        
+    Returns
+    -------
+    results : dict
+        Dictionary mapping (model, strategy) to Table1Result
+    """
     import time
     
     models = ['model1', 'model2', 'model3', 'model4', 'model5']
@@ -377,13 +530,16 @@ def replicate_table1(
         
         model_start = time.time()
         
+        # Simulate paths once per model - returns GLOBAL C and sigma
         paths, C, sigma_avg = simulate_paths(model, N, T, seed)
         
         if verbose:
             print(f"  Paths simulated in {time.time() - model_start:.1f}s (C={C:.6f}, σ={sigma_avg:.6f})")
         
+        # Grid (in sigma units)
         U_grid = np.arange(0.1, 2.55, 0.1)
         L_grid = np.arange(-2.5, -0.05, 0.1)
+        # Transaction cost: 20bp per trade (paper: "40bp per complete trading" = round-trip)
         tc = cost_bp / 10000
         
         for strategy in strategies:
@@ -422,6 +578,7 @@ def replicate_table1(
     return results
 
 
+# Reference values from paper
 PAPER_TABLE1 = {
     ('model1', 'A'): {'U_cr': 0.7, 'L_cr': -0.7, 'CR': 0.3868, 'U_sr': 1.1, 'L_sr': -1.1, 'SR': 0.0882},
     ('model1', 'B'): {'U_cr': 0.5, 'L_cr': -0.5, 'CR': 0.4245, 'U_sr': 0.5, 'L_sr': -0.5, 'SR': 0.0807},
@@ -442,6 +599,7 @@ PAPER_TABLE1 = {
 
 @njit
 def _simulate_model5_noclip(T: int, x0: float, eta_t: np.ndarray) -> np.ndarray:
+    """Model A3 (Appendix): Nonlinear + t(3), NO CLIPPING."""
     theta1 = 0.9
     theta2 = 0.2590
     sigma = 0.0049 / np.sqrt(3)
@@ -455,7 +613,7 @@ def _simulate_one_path_s1(model: str, T: int, rng: np.random.Generator, max_trie
     for _ in range(max_tries):
         if model in ["A1", "A2"]:
             eta = rng.standard_normal(T)
-        else:
+        else:  # A3 uses t(3)
             eta = rng.standard_t(df=3, size=T)
 
         if model == "A1":
@@ -470,10 +628,11 @@ def _simulate_one_path_s1(model: str, T: int, rng: np.random.Generator, max_trie
         if np.isfinite(x).all():
             return x
 
+    # If it keeps exploding, return last attempt (will likely be non-finite)
     return x
 
 def simulate_paths_S1(
-    model: str,
+    model: str,   # "A1", "A2", "A3"
     N: int,
     T: int,
     seed: int = 42,
@@ -484,6 +643,7 @@ def simulate_paths_S1(
     for i in range(N):
         paths[i] = _simulate_one_path_s1(model, T, rng)
 
+    # Drop any remaining non-finite paths (rare if max_tries is decent)
     mask = np.isfinite(paths).all(axis=1)
     paths = paths[mask]
     if paths.shape[0] == 0:
@@ -500,6 +660,11 @@ def _eval_path_D(
     C_minus: float, C_plus: float,
     tc: float
 ) -> Tuple[float, float, float, int]:
+    """
+    Strategy D: A-entry, but exit at shifted close levels:
+      short closes when crossing DOWN through C_minus
+      long  closes when crossing UP through C_plus
+    """
     T = len(x)
     pos = 0
 
@@ -522,9 +687,11 @@ def _eval_path_D(
             elif cur <= L:
                 new_pos = 1
         elif pos == 1:
+            # long: close when cross UP through C_plus
             if prev < C_plus and cur >= C_plus:
                 new_pos = 0
         elif pos == -1:
+            # short: close when cross DOWN through C_minus
             if prev > C_minus and cur <= C_minus:
                 new_pos = 0
 
@@ -545,6 +712,13 @@ def _eval_path_E(
     C_minus: float, C_plus: float,
     tc: float
 ) -> Tuple[float, float, float, int]:
+    """
+    Strategy E: C-entry/stop-loss, but take-profit at shifted levels:
+      short TP when crossing DOWN through C_minus
+      long  TP when crossing UP through C_plus
+    Stop-loss same as Strategy C.
+    PnL uses NEW position (as in Strategy C).
+    """
     T = len(x)
     pos = 0
 
@@ -558,12 +732,15 @@ def _eval_path_E(
         prev = x[t - 1]
         cur = x[t]
 
+        # Entry (same as C)
         entry_short = (prev > U and cur <= U)
         entry_long  = (prev < L and cur >= L)
 
+        # Take-profit at shifted levels
         tp_short = (prev > C_minus and cur <= C_minus)
         tp_long  = (prev < C_plus  and cur >= C_plus)
 
+        # Stop-loss (same as C)
         stop_short = (prev < U and cur >= U)
         stop_long  = (prev > L and cur <= L)
 
@@ -580,6 +757,7 @@ def _eval_path_E(
             if tp_short or stop_short:
                 new_pos = 0
 
+        # KEY: PnL uses NEW position (Strategy C convention)
         pnl = new_pos * dx
 
         if new_pos != pos:
@@ -591,15 +769,14 @@ def _eval_path_E(
         sum_p2 += pnl * pnl
 
     return cr, sum_p, sum_p2, n_steps
-
 @njit(parallel=True)
 def _grid_search_numba_S1_DE(
-    paths: np.ndarray,
+    paths: np.ndarray,         # (N, T)
     C: float,
     sigma_avg: float,
-    U_grid: np.ndarray,
-    delta_grid: np.ndarray,
-    strategy_id: int,
+    U_grid: np.ndarray,        # sigma units: [0.1..2.5]
+    delta_grid: np.ndarray,    # [-0.5..1.0]
+    strategy_id: int,          # 4 = D, 5 = E
     tc: float
 ) -> Tuple[np.ndarray, np.ndarray]:
     N, T = paths.shape
@@ -620,9 +797,11 @@ def _grid_search_numba_S1_DE(
         if u_sigma <= 0:
             continue
 
+        # Enforce L = -U (in sigma units), converted to levels
         U_level = C + u_sigma * sigma_avg
         L_level = C - u_sigma * sigma_avg
 
+        # Delta is based on distance from mean to boundary
         U_dist = U_level - C
         Delta = delta * U_dist
         C_minus = C - Delta
@@ -652,8 +831,8 @@ def _grid_search_numba_S1_DE(
 
 @dataclass
 class TableS1Result:
-    model: str
-    strategy: str
+    model: str       # "A1","A2","A3"
+    strategy: str    # "D","E"
     U_star_cr: float
     delta_star_cr: float
     CR: float
@@ -663,8 +842,8 @@ class TableS1Result:
 
 
 def run_tableS1_optimization(
-    model: str,
-    strategy: str,
+    model: str,              # "A1","A2","A3"
+    strategy: str,           # "D","E"
     N: int = 10000,
     T: int = 1000,
     cost_bp: float = 20.0,
