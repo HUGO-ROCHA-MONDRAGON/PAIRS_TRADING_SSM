@@ -1,115 +1,95 @@
-"""
-Simulation utilities for generating synthetic spreads.
-"""
-
 import numpy as np
 import pandas as pd
-from typing import Optional
 
 
 def simulate_cir_spread(
-    n: int = 800,
-    dt: float = 1/252,
-    s0: float = 5.0,
-    kappa: float = 3.0,
-    theta: float = 5.0,
-    sigma: float = 0.9,
-    seed: Optional[int] = 42
+    n_steps: int = 252,
+    dt: float = 1.0,
+    kappa: float = 0.5,
+    theta: float = 0.0,
+    sigma: float = 0.1,
+    x0: float = 0.0,
+    seed: int | None = None,
 ) -> pd.Series:
-    """
-    Simulate a positive mean-reverting spread using the CIR process.
+    if seed is not None:
+        np.random.seed(seed)
     
-    The spread follows the Cox-Ingersoll-Ross (CIR) stochastic differential equation:
-        dS = kappa * (theta - S) * dt + sigma * sqrt(S) * dW
+    x = np.zeros(n_steps + 1)
+    x[0] = x0
     
-    Uses full-truncation Euler scheme to ensure non-negativity.
+    for t in range(n_steps):
+        dW = np.random.randn() * np.sqrt(dt)
+        x[t + 1] = x[t] + kappa * (theta - x[t]) * dt + sigma * np.sqrt(max(x[t] - theta, 0) + 0.01) * dW
     
-    Parameters
-    ----------
-    n : int, default 800
-        Number of time steps to simulate.
-    dt : float, default 1/252
-        Time step size (default is daily for 252 trading days/year).
-    s0 : float, default 5.0
-        Initial spread value.
-    kappa : float, default 3.0
-        Mean-reversion speed parameter.
-    theta : float, default 5.0
-        Long-term mean level.
-    sigma : float, default 0.9
-        Volatility parameter.
-    seed : int or None, default 42
-        Random seed for reproducibility. None for random initialization.
-    
-    Returns
-    -------
-    pd.Series
-        Simulated spread as a pandas Series with integer index.
-    
-    Examples
-    --------
-    >>> S = simulate_cir_spread(n=900, dt=1/252, s0=5.2, kappa=2.5, theta=5.0, sigma=1.1, seed=7)
-    >>> print(f"Mean: {S.mean():.2f}, Std: {S.std():.2f}")
-    """
-    rng = np.random.default_rng(seed)
-    S = np.empty(n)
-    S[0] = s0
-    
-    for t in range(1, n):
-        z = rng.standard_normal()
-        s_pos = max(S[t-1], 0.0)  # truncation for sqrt
-        S[t] = S[t-1] + kappa * (theta - s_pos) * dt + sigma * np.sqrt(s_pos) * np.sqrt(dt) * z
-        S[t] = max(S[t], 0.0)     # enforce non-negativity
-    
-    return pd.Series(S, name="spread")
+    return pd.Series(x, name="spread")
 
 
 def simulate_ou_spread(
-    n: int = 800,
-    dt: float = 1/252,
-    s0: float = 0.0,
-    kappa: float = 3.0,
+    n_steps: int = 252,
+    dt: float = 1.0,
+    kappa: float = 0.5,
     theta: float = 0.0,
     sigma: float = 0.1,
-    seed: Optional[int] = 42
+    x0: float = 0.0,
+    seed: int | None = None,
 ) -> pd.Series:
-    """
-    Simulate a mean-reverting spread using the Ornstein-Uhlenbeck (OU) process.
+    if seed is not None:
+        np.random.seed(seed)
     
-    The spread follows the OU stochastic differential equation:
-        dS = kappa * (theta - S) * dt + sigma * dW
+    x = np.zeros(n_steps + 1)
+    x[0] = x0
     
-    Unlike CIR, the OU process can go negative and has constant volatility.
+    for t in range(n_steps):
+        dW = np.random.randn() * np.sqrt(dt)
+        x[t + 1] = x[t] + kappa * (theta - x[t]) * dt + sigma * dW
     
-    Parameters
-    ----------
-    n : int, default 800
-        Number of time steps to simulate.
-    dt : float, default 1/252
-        Time step size (default is daily for 252 trading days/year).
-    s0 : float, default 0.0
-        Initial spread value.
-    kappa : float, default 3.0
-        Mean-reversion speed parameter.
-    theta : float, default 0.0
-        Long-term mean level.
-    sigma : float, default 0.1
-        Volatility parameter.
-    seed : int or None, default 42
-        Random seed for reproducibility. None for random initialization.
+    return pd.Series(x, name="spread")
+
+
+def simulate_ou_spread_vectorized(
+    n_steps: int = 252,
+    dt: float = 1.0,
+    kappa: float = 0.5,
+    theta: float = 0.0,
+    sigma: float = 0.1,
+    x0: float = 0.0,
+    n_paths: int = 1000,
+    seed: int | None = None,
+) -> np.ndarray:
+    if seed is not None:
+        np.random.seed(seed)
     
-    Returns
-    -------
-    pd.Series
-        Simulated spread as a pandas Series with integer index.
-    """
-    rng = np.random.default_rng(seed)
-    S = np.empty(n)
-    S[0] = s0
+    dW = np.random.randn(n_paths, n_steps) * np.sqrt(dt)
     
-    sqrt_dt = np.sqrt(dt)
-    for t in range(1, n):
-        z = rng.standard_normal()
-        S[t] = S[t-1] + kappa * (theta - S[t-1]) * dt + sigma * sqrt_dt * z
+    x = np.zeros((n_paths, n_steps + 1))
+    x[:, 0] = x0
     
-    return pd.Series(S, name="spread")
+    for t in range(n_steps):
+        x[:, t + 1] = x[:, t] + kappa * (theta - x[:, t]) * dt + sigma * dW[:, t]
+    
+    return x
+
+
+def simulate_cir_spread_vectorized(
+    n_steps: int = 252,
+    dt: float = 1.0,
+    kappa: float = 0.5,
+    theta: float = 0.0,
+    sigma: float = 0.1,
+    x0: float = 0.0,
+    n_paths: int = 1000,
+    seed: int | None = None,
+) -> np.ndarray:
+    if seed is not None:
+        np.random.seed(seed)
+    
+    dW = np.random.randn(n_paths, n_steps) * np.sqrt(dt)
+    
+    x = np.zeros((n_paths, n_steps + 1))
+    x[:, 0] = x0
+    
+    for t in range(n_steps):
+        vol = sigma * np.sqrt(np.maximum(x[:, t] - theta, 0) + 0.01)
+        x[:, t + 1] = x[:, t] + kappa * (theta - x[:, t]) * dt + vol * dW[:, t]
+    
+    return x
