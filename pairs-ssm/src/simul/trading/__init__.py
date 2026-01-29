@@ -1,5 +1,3 @@
-"""Trading strategies module."""
-
 from simul.trading.strategy import (
     strategy_A_signals,
     strategy_B_signals,

@@ -1,25 +1,6 @@
-"""
-Pairs Trading with State-Space Models
-======================================
-
-A Python package for pairs trading using state-space models,
-implementing the methodology from Zhang (2021).
-
-Main components:
-- trading: Trading strategy logic (strategies A, B, C, D, E)
-- optimization: Threshold optimization (Table 1 & Table S1)
-- utils: Simulation utilities (CIR spread simulation)
-
-Example usage:
-    >>> from simul.utils.simulation import simulate_cir_spread
-    >>> from simul.trading.strategy import strategy_A_signals, find_trades
-    >>> from simul.optimization.table1 import replicate_table1
-"""
-
 __version__ = "0.1.0"
 __author__ = "Quantitative Finance Project"
 
-# Trading strategies
 from simul.trading.strategy import (
     strategy_A_signals,
     strategy_B_signals,
