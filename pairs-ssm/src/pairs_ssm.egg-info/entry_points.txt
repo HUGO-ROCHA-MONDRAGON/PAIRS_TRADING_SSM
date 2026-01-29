@@ -1,0 +1,2 @@
+[console_scripts]
+pairs-ssm = pairs_ssm.cli:main
