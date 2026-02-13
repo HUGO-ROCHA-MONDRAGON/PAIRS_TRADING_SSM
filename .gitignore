@@ -1,14 +1,30 @@
-
 # Python
-venv/
-.venv/
 __pycache__/
 *.pyc
-.ipynb_checkpoints/
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
 
-# Python
+# Virtual environments
 venv/
 .venv/
-__pycache__/
-*.pyc
+
+# Jupyter
 .ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Cache
+data/.cache_pairs/
+
+# Generated outputs (re-created by notebooks)
+data/outputs/
+*.npy
+
+# PDFs
+*.pdf

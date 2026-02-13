@@ -50,11 +50,8 @@ dev = [
     "jupyter>=1.0.0",
 ]
 
-[project.scripts]
-pairs-ssm = "pairs_ssm.cli:main"
-
 [project.urls]
-"Repository" = "https://github.com/caglanaz/Gestion-Quantitative"
+"Repository" = "https://github.com/HUGO-ROCHA-MONDRAGON/PAIRS_TRADING_SSM"
 
 [tool.setuptools.packages.find]
 where = ["src"]
